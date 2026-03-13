@@ -1,7 +1,7 @@
 import numpy as np
 from scipy.stats import norm
-import slac_measurements.image.optimize as optimize
-import slac_measurements.image.gaussian as gaussian
+import slac_measurements.fitting.optimize as optimize
+import slac_measurements.fitting.gaussian as gaussian
 
 
 def curve(x, mean, sigma, amp, off, n):

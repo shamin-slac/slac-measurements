@@ -70,7 +70,7 @@ class ImageProjectionFit(ImageFit):
     ----------
     fit_module : str
         Name of the fitting module to use for the projections. Must be a module
-        in slac_measurements.image.
+        in slac_measurements.fitting.
     validate_fit : bool
         Whether to validate fit parameters after fitting. If True, fitting will return NaN values if
         the beam extent is off the screen or if the fit amplitude is below the noise threshold.
@@ -108,7 +108,7 @@ class ImageProjectionFit(ImageFit):
         signal_to_noise_ratios = []
         beam_extent = []
 
-        module = importlib.import_module(f"slac_measurements.image.{self.fit_module}")
+        module = importlib.import_module(f"slac_measurements.fitting.{self.fit_module}")
 
         for axis, dim in enumerate(dimensions):
             projection = np.array(np.sum(image, axis=axis))
