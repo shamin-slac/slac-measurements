@@ -541,15 +541,6 @@ class WireMeasurementCollection(BeamProfileMeasurement):
             logger=self.logger,
         )
 
-    def _validate_position_data(self, position_data: np.ndarray) -> None:
-        """
-        Validates the position data to ensure it is suitable for analysis.
-        """
-        if position_data.min() == position_data.max():
-            msg = "Min and max position are the same. Check scan data and collection. Exiting scan."
-            self.logger.error(msg)
-            raise RuntimeError(msg)
-
     def _wait_until(self, condition, timeout=5, period=0.1) -> bool:
         # Returns True if condition met within timeout
         start = time.time()
