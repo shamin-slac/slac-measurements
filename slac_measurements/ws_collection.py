@@ -84,8 +84,7 @@ class WireMeasurementCollection(BeamProfileMeasurement):
           inner/outer position in sequence with the buffer acquiring the whole
           time.
 
-        The desired mode can be selected by passing ``scan_type``.  The
-        default is ``on_the_fly`` to preserve backwards compatibility.
+        The desired mode can be selected by passing ``scan_type``.
 
         Parameters
         ----------
@@ -172,7 +171,7 @@ class WireMeasurementCollection(BeamProfileMeasurement):
         self.logger.info("Device dictionary built.")
         return devices
 
-    def scan_with_wire(self, scan_type: str = "on_the_fly") -> None:
+    def scan_with_wire(self, scan_type: str = "step") -> None:
         """
         Kick off motion for the wire and (optionally) the buffer.
 
