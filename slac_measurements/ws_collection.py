@@ -377,12 +377,6 @@ class WireMeasurementCollection(BeamProfileMeasurement):
                 positions.append(getattr(self.my_wire, attr_name))
         return sorted(positions)
 
-    def _get_units_for_device(self, device_name: str) -> str:
-        """Get the appropriate units for a given device based on its name."""
-        if device_name == "TMITLOSS":
-            return "%% beam loss"
-        return "counts"
-
     def _initialize_wire_with_retry(
         self,
         wire_action: str,
