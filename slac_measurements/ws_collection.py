@@ -5,17 +5,12 @@ from pathlib import Path
 from typing import Optional
 
 import numpy as np
-import yaml
 from pydantic import model_validator
 from typing_extensions import Self
 
-from slac_devices.reader import create_lblm, create_pmt
 from slac_devices.wire import Wire
-from slac_measurements.logger.file_logger import custom_logger
-from slac_measurements.beam_profile import BeamProfileMeasurement
-from slac_measurements.buffer_reservation import reserve_buffer
-from slac_measurements.tmit_loss import TMITLoss
-from slac_measurements.utils import collect_with_size_check
+import slac_measurements.beam_profile
+
 from slac_measurements.ws_collection_results import (
     MeasurementMetadata,
     WireMeasurementCollectionResult,
@@ -25,9 +20,10 @@ _DATE = datetime.now().strftime("%Y%m%d")
 _LOG_FILENAME = f"ws_log_{_DATE}.txt"
 _LOGGER_NAME = "wire_scan_logger"
 _WIRE_LBLMS_LOCATION = Path(__file__).resolve().parent.parent / "devices" / "yaml" / "wire_lblms.yaml"
+_WIRE_TOLERANCE = 250  # microns
 
 
-class WireMeasurementCollection(BeamProfileMeasurement):
+class WireMeasurementCollection(slac_measurements.beam_profile.BeamProfileMeasurement):
     """
     Collects wire scan measurement data via motor motion and BSA buffer.
 
@@ -82,18 +78,9 @@ class WireMeasurementCollection(BeamProfileMeasurement):
         # e.g. "LBLM:TEST" -> name = "LBLM", area = "TEST"
         for ds in self.my_wire.metadata.detectors:
             name, area = ds.split(":")
-
-            if name == "TMITLOSS":
-                devices["TMITLOSS"] = TMITLoss(
-                    my_buffer=self.my_buffer,
-                    my_wire=self.my_wire,
-                    beampath=self.beampath,
-                    region=self.my_wire.area,
-                )
-            else:
-                detector = self._instantiate_device(name, area)
-                if detector is not None:
-                    devices[name] = detector
+            detector = self._instantiate_device(name, area)
+            if detector is not None:
+                devices[name] = detector
 
         self.logger.info("Device dictionary built.")
         return devices
@@ -103,6 +90,8 @@ class WireMeasurementCollection(BeamProfileMeasurement):
         Make additional metadata.
         """
         def _load_yaml_config() -> Optional[dict]:
+            import yaml
+
             file_to_open = _WIRE_LBLMS_LOCATION
 
             if file_to_open.exists() is False:
@@ -219,8 +208,9 @@ class WireMeasurementCollection(BeamProfileMeasurement):
 
     @model_validator(mode="after")
     def run_setup(self) -> Self:
+        import slac_measurements.logger.file_logger
         # Configure  logger
-        self.logger = custom_logger(
+        self.logger = slac_measurements.logger.file_logger.custom_logger(
             log_file=_LOG_FILENAME,
             name=_LOGGER_NAME,
         )
@@ -290,118 +280,39 @@ class WireMeasurementCollection(BeamProfileMeasurement):
             i / 10,
         )
 
-    def _active_profiles(self) -> list:
-        """
-        Returns a list of active scan profiles based on wire settings.
-        """
-        return [
-            axis
-            for axis, use in zip(
-                "xyu",
-                [
-                    self.my_wire.use_x_wire,
-                    self.my_wire.use_y_wire,
-                    self.my_wire.use_u_wire,
-                ],
-            )
-            if use
-        ]
-
-    def _calc_buffer_points(self) -> int:
-        """
-        Determine the number of buffer points for a wire scan.
-
-        The beam rate and pulses per profile are used here to calculate the
-        wire speed, which in turn defines how many BSA buffer points are needed
-        to capture the full scan. The minimum safe wire speed is calculated
-        separately and enforced by the motion IOC. The buffer size must be
-        sufficient for data collection while staying under the 20,000-point
-        operational limit.
-
-        In the historical mode (120 Hz, 350 pulses), ~1,600 points are
-        required; this function returns 1,595. In the expected high-rate mode
-        (16 kHz, 5,000 pulses), the function estimates ~19,166 points, still
-        within the system limit.
-
-        Returns
-        -------
-        int
-            Estimated number of buffer points to allocate for the scan.
-        """
-
-        rate = self.my_wire.beam_rate
-        if rate is None or rate <= 0:
-            self.logger.warning(
-                "Invalid beam rate '%s'. Defaulting to 120 Hz for buffer size calculation.",
-                rate,
-            )
-            rate = 120
-        pulses = self.my_wire.scan_pulses
-
-        # 16000 max rate, 10 min rate
-        log_range = np.log10(16000) - np.log10(10)
-        rate_factor = (np.log10(rate) - np.log10(10)) / log_range
-        fudge = 1.5 - 0.4 * rate_factor  # Fudge the calculation by 1.1 to 1.5
-
-        buffer_points = pulses * 3 * fudge + rate / 6
-        return int(buffer_points)
-
-    def _calculate_step_speed(self, position_index: int, positions: list) -> int:
-        """Return speed for a step position: max for inner, computed for outer.
-
-        Even indices use speed_max; odd indices use calc speed.
-        """
-        if position_index % 2 == 0:
-            # inner position – use maximum speed
-            return int(self.my_wire.speed_max)
-
-        # outer position – calculate speed to span gap in one pulse train
-        position_delta = positions[position_index] - positions[position_index - 1]
-        speed = (position_delta / self.my_wire.scan_pulses) * self.my_wire.beam_rate
-        return int(speed)
-
     def _collect_device_data(self, device_name: str) -> np.ndarray:
         """Collect data for a given device using the appropriate method."""
+        import slac_measurements.utils
+        def _get_buffer_collection_method(device_name: str) -> Optional[str]:
+            """
+            Determine the buffer collection method for a given device based on its name.
+            Returns None for devices that don't collect data this way (e.g., TMITLOSS).
+            """
+            if device_name == self.my_wire.name:
+                return "position_buffer"
+            elif device_name.startswith("LBLM"):
+                return "fast_buffer"
+            elif device_name.startswith("PMT"):
+                return "qdcraw_buffer"
+            else:
+                return None
+
         device = self.devices[device_name]
-        buffer_method = self._get_buffer_collection_method(device_name)
+        buffer_method = _get_buffer_collection_method(device_name)
 
         if buffer_method is None:
             return (
                 device.measure()
             )  # For devices like TMITLOSS that don't use buffer collection
 
-        return collect_with_size_check(
+        return slac_measurements.utils.collect_with_size_check(
             device, buffer_method, self.my_buffer, self.logger
         )
-
-    def _get_buffer_collection_method(self, device_name: str) -> Optional[str]:
-        """
-        Determine the buffer collection method for a given device based on its name.
-        Returns None for devices that don't collect data this way (e.g., TMITLOSS).
-        """
-        if device_name == self.my_wire.name:
-            return "position_buffer"
-        elif device_name.startswith("LBLM"):
-            return "fast_buffer"
-        elif device_name.startswith("PMT"):
-            return "qdcraw_buffer"
-        else:
-            return None
-
-    def _get_step_positions(self) -> list:
-        """Return sorted inner/outer positions for active profiles."""
-        positions = []
-        for profile in self._active_profiles():
-            for mode in ["inner", "outer"]:
-                attr_name = f"{profile}_wire_{mode}"
-                positions.append(getattr(self.my_wire, attr_name))
-        return sorted(positions)
 
     def _initialize_wire_with_retry(
         self,
         wire_action: str,
         max_attempts: int = 3,
-        timeout: int = 10,
     ) -> None:
         """Call start_scan/initialize with retries until wire.enabled.
 
@@ -437,14 +348,14 @@ class WireMeasurementCollection(BeamProfileMeasurement):
             action_method()
 
             # If returns True within timeout, proceed
-            if self._wait_until(lambda: self.my_wire.enabled, timeout=timeout):
+            if self._wait_until(lambda: self.my_wire.enabled):
                 self.logger.info(f"{self.my_wire.name} initialized.")
                 return
 
             # After timeout, log and iterate through for loop again
             else:
                 self.logger.warning(
-                    f"{self.my_wire.name} did not enable after {timeout}s - retrying..."
+                    "%s did not enable - retrying...", self.my_wire.name
                 )
 
         raise RuntimeError(
@@ -455,9 +366,20 @@ class WireMeasurementCollection(BeamProfileMeasurement):
         """
         Instantiate a single device by name and area
         """
+        import slac_devices.reader
+        import slac_measurements.tmit_loss
+
+        if name == "TMITLOSS":
+            return slac_measurements.tmit_loss.TMITLoss(
+                my_buffer=self.my_buffer,
+                my_wire=self.my_wire,
+                beampath=self.beampath,
+                region=self.my_wire.area,
+            )
+
         create_by_prefix = {
-            "LBLM": create_lblm,
-            "PMT": create_pmt,
+            "LBLM": slac_devices.reader.create_lblm,
+            "PMT": slac_devices.reader.create_pmt,
         }
 
         creator = next(
@@ -475,25 +397,47 @@ class WireMeasurementCollection(BeamProfileMeasurement):
 
         return device
 
-    
-
     def _move_to_step_position(
         self, position: int, position_index: int, total_positions: int
     ) -> None:
+
+        def _calculate_step_speed(position_index: int, positions: list) -> int:
+            """Return speed for a step position: max for inner, computed for outer.
+
+            Even indices use speed_max; odd indices use calc speed.
+            """
+            if position_index % 2 == 0:
+                # inner position – use maximum speed
+                return int(self.my_wire.speed_max)
+
+            # outer position – calculate speed to span gap in one pulse train
+            position_delta = positions[position_index] - positions[position_index - 1]
+            speed = (position_delta / self.my_wire.scan_pulses) * self.my_wire.beam_rate
+            return int(speed)
+
+        def _get_step_positions() -> list:
+            """Return sorted inner/outer positions for active profiles."""
+            positions = []
+            for profile in self.my_wire.active_profiles():
+                for mode in ["inner", "outer"]:
+                    attr_name = f"{profile}_wire_{mode}"
+                    positions.append(getattr(self.my_wire, attr_name))
+            return sorted(positions)
+
         """Move wire to a step position, waiting up to 15s or raise error."""
         self.logger.info(
             f"Moving wire to {position} (step {position_index + 1}/{total_positions})..."
         )
 
         # Set speed and move
-        positions = self._get_step_positions()
-        speed = self._calculate_step_speed(position_index, positions)
+        positions = _get_step_positions()
+        speed = _calculate_step_speed(position_index, positions)
         self.my_wire.speed = speed
         self.my_wire.motor = position
 
         # Wait for position with 250 um tolerance
         if not self._wait_until(
-            lambda: abs(self.my_wire.motor_rbv - position) < 250, timeout=15
+            lambda: abs(self.my_wire.motor_rbv - position) < _WIRE_TOLERANCE,
         ):
             raise RuntimeError(
                 f"{self.my_wire.name} did not reach position {position} after 15s."
@@ -526,16 +470,17 @@ class WireMeasurementCollection(BeamProfileMeasurement):
             time.sleep(0.1)
 
     def _reserve_buffer(self) -> object:
+        import slac_measurements.ws_buffer
+
         if self.my_buffer is None:
-            return reserve_buffer(
+            return slac_measurements.ws_buffer.reserve_buffer(
                 beampath=self.beampath,
-                name="LCLS Tools Wire Scan",
-                n_measurements=self._calc_buffer_points(),
-                destination_mode="Inclusion",
                 logger=self.logger,
+                pulses=self.my_wire.scan_pulses,
+                beam_rate=self.my_wire.beam_rate,
             )
 
-    def _wait_until(self, condition, timeout=5, period=0.1) -> bool:
+    def _wait_until(self, condition, timeout=10, period=0.1) -> bool:
         # Returns True if condition met within timeout
         start = time.time()
         while time.time() - start < timeout:
