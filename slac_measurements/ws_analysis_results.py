@@ -49,6 +49,27 @@ class WireMeasurementAnalysisResult(BeamProfileMeasurementResult):
     collection_result: WireMeasurementCollectionResult
     profiles: Dict[str, ProfileMeasurement]
 
+    def __repr__(self) -> str:
+        """Return a compact string representation of the analysis result."""
+        meta = self.collection_result.metadata
+        profile_count = len(self.profiles)
+        fit_profile_count = len(self.fit_result)
+        detector_count = len(meta.detectors)
+        rms_sizes_repr = (
+            self.rms_sizes.tolist() if self.rms_sizes is not None else None
+        )
+
+        return (
+            f"WireMeasurementAnalysisResult("
+            f"wire_name='{meta.wire_name}', "
+            f"beampath='{meta.beampath}', "
+            f"rms_sizes={rms_sizes_repr}, "
+            f"profiles={profile_count}, "
+            f"fit_profiles={fit_profile_count}, "
+            f"detectors={detector_count}, "
+            f"timestamp={meta.timestamp.isoformat()})"
+        )
+
     def save_to_h5(self, filepath: str) -> None:
         """
         Persist the analysis result to an HDF5 file.
@@ -131,7 +152,9 @@ class WireMeasurementAnalysisResult(BeamProfileMeasurementResult):
             for profile, prof in self.profiles.items():
                 pgrp = profs_grp.create_group(profile)
                 pgrp.create_dataset("positions", data=prof.positions)
-                pgrp.create_dataset("profile_indices", data=prof.profile_indices)
+                pgrp.create_dataset(
+                    "profile_indices", data=prof.profile_indices
+                )
                 dets_grp = pgrp.create_group("detectors")
                 for det_name, det in prof.detectors.items():
                     dg = dets_grp.create_group(det_name)
