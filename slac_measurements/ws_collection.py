@@ -10,7 +10,7 @@ from typing_extensions import Self
 
 from slac_devices.wire import Wire
 import slac_measurements.beam_profile
-
+import slac_measurements.utils
 from slac_measurements.ws_collection_results import (
     MeasurementMetadata,
     WireMeasurementCollectionResult,
@@ -348,7 +348,7 @@ class WireMeasurementCollection(slac_measurements.beam_profile.BeamProfileMeasur
             action_method()
 
             # If returns True within timeout, proceed
-            if self._wait_until(lambda: self.my_wire.enabled):
+            if slac_measurements.utils.wait_until(lambda: self.my_wire.enabled):
                 self.logger.info(f"{self.my_wire.name} initialized.")
                 return
 
@@ -436,7 +436,7 @@ class WireMeasurementCollection(slac_measurements.beam_profile.BeamProfileMeasur
         self.my_wire.motor = position
 
         # Wait for position with 250 um tolerance
-        if not self._wait_until(
+        if not slac_measurements.utils._wait_until(
             lambda: abs(self.my_wire.motor_rbv - position) < _WIRE_TOLERANCE,
         ):
             raise RuntimeError(
@@ -480,11 +480,4 @@ class WireMeasurementCollection(slac_measurements.beam_profile.BeamProfileMeasur
                 beam_rate=self.my_wire.beam_rate,
             )
 
-    def _wait_until(self, condition, timeout=10, period=0.1) -> bool:
-        # Returns True if condition met within timeout
-        start = time.time()
-        while time.time() - start < timeout:
-            if condition():
-                return True
-            time.sleep(period)
-        return False
+
