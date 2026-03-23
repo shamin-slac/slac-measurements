@@ -131,7 +131,7 @@ class WireMeasurementCollection(slac_measurements.beam_profile.BeamProfileMeasur
         self.detectors = [d.split(":")[0] for d in self.my_wire.metadata.detectors]
 
         # Generate dictionary of all requried lcls-tools device objects
-        self.devices = self.create_device_dictionary()
+        self.devices = self._create_device_dictionary()
         return self
 
     def _create_device_dictionary(self) -> dict:
