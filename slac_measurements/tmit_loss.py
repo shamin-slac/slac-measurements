@@ -190,8 +190,9 @@ class TMITLoss(Measurement):
         # Define valid regions
         tmit_regions = {"HTR", "DIAG0", "COL1", "EMIT2", "DOG", "BYP", "SPD", "LTUS"}
         if self.region not in tmit_regions:
+            valid_regions_str = ", ".join(sorted(tmit_regions))
             raise ValueError(
-                f"Invalid region '{self.region}'. Must be one of {{valid_regions}}"
+                f"Invalid region '{self.region}'. Must be one of {valid_regions_str}."
             )
 
         bpms_before_wire = self.my_wire.metadata.bpms_before_wire
