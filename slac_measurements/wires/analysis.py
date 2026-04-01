@@ -333,7 +333,7 @@ class WireMeasurementAnalysis(slac_measurements.beam_profile.BeamProfileAnalysis
 
         return profile_indices
 
-    def _get_rms_sizes(self, fit_result: dict) -> tuple | None:
+    def _get_rms_sizes(self, fit_result: dict) -> tuple[float | None, float | None]:
         """
         Extract RMS beam sizes from fit results.
 
@@ -344,18 +344,22 @@ class WireMeasurementAnalysis(slac_measurements.beam_profile.BeamProfileAnalysis
             fit_result (dict): Fit results from fit_data_by_profile().
 
         Returns:
-            tuple or None: (x_rms, y_rms) in meters, or None if both profiles
-            not present.
+            tuple[float | None, float | None]: (x_rms, y_rms) in meters.
+            Returns (None, None) if neither profile is present.
         """
-        if "x" in fit_result and "y" in fit_result:
-            default_det = self.collection_result.metadata.default_detector
-            x_fit = fit_result["x"].detectors[default_det]
-            y_fit = fit_result["y"].detectors[default_det]
+        default_det = self.collection_result.metadata.default_detector
+        x_rms = None
+        y_rms = None
 
-            rms_sizes = (x_fit.sigma, y_fit.sigma)
-        else:
-            rms_sizes = None
-        return rms_sizes
+        if "x" in fit_result:
+            x_fit = fit_result["x"].detectors[default_det]
+            x_rms = x_fit.sigma
+
+        if "y" in fit_result:
+            y_fit = fit_result["y"].detectors[default_det]
+            y_rms = y_fit.sigma
+
+        return (x_rms, y_rms)
 
     def _organize_data_by_profile(self, profile_indices) -> dict:
         """
