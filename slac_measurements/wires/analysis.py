@@ -158,21 +158,8 @@ class WireMeasurementAnalysis(slac_measurements.beam_profile.BeamProfileAnalysis
 
             # Generate fit curve (in beam coordinates)
             # Build kwargs dynamically to handle different fit types
-            curve_kwargs = {
-                "x": peak_window[0],
-                "mean": fp["mean"],
-                "sigma": fp["sigma"],
-                "amp": fp["amp"],
-                "off": fp["off"],
-            }
-
-            # Add method-specific parameters
-            if self.fitting_method == "asymmetric_gaussian" and "skew" in fp:
-                curve_kwargs["skew"] = fp["skew"]
-            elif self.fitting_method == "super_gaussian" and "n" in fp:
-                curve_kwargs["n"] = fp["n"]
-
-            fit_curve = fitting_module.curve(**curve_kwargs)
+            curve_params = {k: v for k, v in fp.items() if k != "error"}
+            fit_curve = fitting_module.curve(x=peak_window[0], **curve_params)
 
             return DetectorFit(
                 mean=mean_stage,
