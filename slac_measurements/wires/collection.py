@@ -1,7 +1,7 @@
 import logging
 import time
 from datetime import datetime
-from pathlib import Path
+from importlib.resources import files
 from typing import Optional
 
 import numpy as np
@@ -20,7 +20,9 @@ from slac_measurements.wires.collection_results import (
 _DATE = datetime.now().strftime("%Y%m%d")
 _LOG_FILENAME = f"ws_log_{_DATE}.txt"
 _LOGGER_NAME = "wire_scan_logger"
-_WIRE_LBLMS_LOCATION = Path(__file__).resolve().parent.parent / "devices" / "yaml" / "wire_lblms.yaml"
+_WIRE_LBLMS_LOCATION = files("slac_db").joinpath(
+    "package_data", "wire_lblms.yaml"
+)
 _WIRE_TOLERANCE = 250  # microns
 
 
@@ -131,7 +133,7 @@ class WireMeasurementCollection(slac_measurements.beam_profile.BeamProfileMeasur
         # Get list of detector names from wire metadata
         self.detectors = [d.split(":")[0] for d in self.my_wire.metadata.detectors]
 
-        # Generate dictionary of all requried lcls-tools device objects
+        # Generate dictionary of all required lcls-tools device objects
         self.devices = self._create_device_dictionary()
         return self
 
@@ -210,13 +212,20 @@ class WireMeasurementCollection(slac_measurements.beam_profile.BeamProfileMeasur
                 self.logger.error(msg)
                 return None
 
-            with open(file_to_open, "r") as f:
+            with file_to_open.open("r") as f:
                 wire_lblms = yaml.safe_load(f)
                 return wire_lblms
 
         def _get_default_detector() -> str:
             lblm_config = _load_yaml_config()
             if lblm_config is None:
+                if not self.detectors:
+                    msg = (
+                        "No detectors available from wire metadata; "
+                        "cannot determine default detector."
+                    )
+                    self.logger.error(msg)
+                    raise RuntimeError(msg)
                 return self.detectors[0]
             else:
                 default_detector = lblm_config[self.my_wire.name]
