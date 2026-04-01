@@ -69,7 +69,7 @@ class WireBeamProfileMeasurement(
         ----------
         fitting_method : str, optional
             Fit model used by wire-scan analysis. If omitted, uses the
-            instance default ``self.fitting_method``.
+            instance default ``self.fitting_method``, Gaussian.
 
         Returns
         -------
