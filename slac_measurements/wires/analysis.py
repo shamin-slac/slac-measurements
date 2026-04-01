@@ -16,9 +16,6 @@ from slac_measurements.wires.analysis_results import (
 )
 
 
-_MIN_POS_FUDGE = 1.001  # 0.1% fudge factor to ensure we capture all relevant data points in profile range
-
-
 class WireMeasurementAnalysis(slac_measurements.beam_profile.BeamProfileAnalysis):
     """
     Analyzes wire scan data: organizes by profile, fits beam profile curves,
@@ -247,27 +244,30 @@ class WireMeasurementAnalysis(slac_measurements.beam_profile.BeamProfileAnalysis
         self, position_data: np.ndarray, indices: np.ndarray
     ) -> np.ndarray:
         """
-        Return indices of position data that are monotonically non-decreasing.
+        Return indices of position data that form a continuous monotonically 
+        non-decreasing sequence, skipping any encoder wobble at the beginning.
+        
+        Finds the earliest point where monotonic behavior begins and continues
+        from there, allowing the encoder to settle before fitting begins.
         """
-        def _mono_array(pos: np.ndarray) -> np.ndarray:
-            """
-            Boolean mask of monotonically non-decreasing data points
-            Mask of values where difference between neighbors is > 0.
-            """
-            mono = True
-            mono_mask = np.array(
-                # Data point [i-1] is less than subsequent data point [i]
-                # and that relationship was True for the previous pair
-                # for all points
-                [mono := (pos[i - 1] <= pos[i] and mono) for i in range(1, len(pos))],
-                dtype=bool,
-            )
-            mono_mask = np.concatenate(([True], mono_mask))
-            return mono_mask
+        if len(indices) <= 1:
+            return indices
 
         pos = position_data[indices]
-        mono_mask = _mono_array(pos)
-        return indices[mono_mask]
+
+        # Find the first index where the sequence becomes monotonically non-decreasing
+        # by checking if from each starting point onward, all differences are >= 0
+        for start_idx in range(len(pos)):
+            if start_idx == len(pos) - 1:
+                # Last point, trivially monotonic with itself
+                return indices[start_idx:]
+            
+            # Check if from start_idx onward the sequence is monotonic
+            if np.all(np.diff(pos[start_idx:]) >= 0):
+                return indices[start_idx:]
+
+        # Fallback (shouldn't reach here if logic is correct)
+        return indices
 
     def _get_profile_range_indices(self) -> dict:
         """
@@ -278,10 +278,7 @@ class WireMeasurementAnalysis(slac_measurements.beam_profile.BeamProfileAnalysis
         """
         def _get_indices_in_range(position_data: np.ndarray, min_pos: float, max_pos: float) -> np.ndarray:
             """Return indices of position data within a given range."""
-            # When setting motor positions, encoder can wobble at inner range
-            # bound, so we apply a small fudge factor to ensure we capture all relevant data points
-            x = (min_pos * _MIN_POS_FUDGE)
-            return np.where((position_data >= x) & (position_data <= max_pos))[0]
+            return np.where((position_data >= min_pos) & (position_data <= max_pos))[0]
 
         def _validate_position_data(position_data: np.ndarray) -> None:
             """
