@@ -5,8 +5,8 @@ from slac_measurements.wires.scan import WireBeamProfileMeasurement
 
 
 class WireBeamProfileMeasurementTest(TestCase):
-    @patch("slac_measurements.wires.wire_scan.WireMeasurementAnalysis")
-    @patch("slac_measurements.wires.wire_scan.WireMeasurementCollection")
+    @patch("slac_measurements.wires.scan.WireMeasurementAnalysis")
+    @patch("slac_measurements.wires.scan.WireMeasurementCollection")
     def test_measure_uses_configured_fitting_method(
         self,
         mock_collection_cls,
@@ -38,8 +38,8 @@ class WireBeamProfileMeasurementTest(TestCase):
             fitting_method="super_gaussian",
         )
 
-    @patch("slac_measurements.wires.wire_scan.WireMeasurementAnalysis")
-    @patch("slac_measurements.wires.wire_scan.WireMeasurementCollection")
+    @patch("slac_measurements.wires.scan.WireMeasurementAnalysis")
+    @patch("slac_measurements.wires.scan.WireMeasurementCollection")
     def test_measure_allows_fitting_method_override(
         self,
         mock_collection_cls,
@@ -66,7 +66,7 @@ class WireBeamProfileMeasurementTest(TestCase):
             fitting_method="asymmetric_gaussian",
         )
 
-    @patch("slac_measurements.wires.wire_scan.WireMeasurementAnalysis")
+    @patch("slac_measurements.wires.scan.WireMeasurementAnalysis")
     def test_analyze_can_refit_with_override(self, mock_analysis_cls):
         mock_analysis = mock_analysis_cls.return_value
         mock_analysis.analyze.return_value = "analysis-result"
