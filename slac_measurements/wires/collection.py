@@ -1,7 +1,6 @@
 import logging
 import time
 from datetime import datetime
-from importlib.resources import files
 from typing import Optional
 
 import numpy as np
@@ -20,9 +19,6 @@ from slac_measurements.wires.collection_results import (
 _DATE = datetime.now().strftime("%Y%m%d")
 _LOG_FILENAME = f"ws_log_{_DATE}.txt"
 _LOGGER_NAME = "wire_scan_logger"
-_WIRE_LBLMS_LOCATION = files("slac_db").joinpath(
-    "package_data", "wire_lblms.yaml"
-)
 _WIRE_TOLERANCE = 250  # microns
 
 
@@ -202,23 +198,10 @@ class WireMeasurementCollection(slac_measurements.beam_profile.BeamProfileMeasur
         """
         Make additional metadata.
         """
-        def _load_yaml_config() -> Optional[dict]:
-            import yaml
-
-            file_to_open = _WIRE_LBLMS_LOCATION
-
-            if file_to_open.exists() is False:
-                msg = f"YAML config file {file_to_open} not found."
-                self.logger.error(msg)
-                return None
-
-            with file_to_open.open("r") as f:
-                wire_lblms = yaml.safe_load(f)
-                return wire_lblms
-
         def _get_default_detector() -> str:
-            lblm_config = _load_yaml_config()
-            if lblm_config is None:
+            default_detector = self.my_wire.metadata.default_detector
+
+            if not default_detector:
                 if not self.detectors:
                     msg = (
                         "No detectors available from wire metadata; "
@@ -227,9 +210,9 @@ class WireMeasurementCollection(slac_measurements.beam_profile.BeamProfileMeasur
                     self.logger.error(msg)
                     raise RuntimeError(msg)
                 return self.detectors[0]
-            else:
-                default_detector = lblm_config[self.my_wire.name]
-                return default_detector
+
+            # Metadata may be stored as "<name>:<area>"; analysis expects the device name key.
+            return default_detector.split(":", 1)[0]
 
         def _get_scan_ranges():
             return {
