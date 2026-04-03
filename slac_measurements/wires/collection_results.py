@@ -14,6 +14,7 @@ class MeasurementMetadata(BaseModel):
     beampath: str
     detectors: list[str]
     default_detector: str
+    rms_detector: Optional[str] = None
     scan_ranges: Dict[str, Tuple[int, int]]
     timestamp: datetime
     active_profiles: list[str]

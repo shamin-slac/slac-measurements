@@ -62,11 +62,14 @@ class WireMeasurementAnalysis(slac_measurements.beam_profile.BeamProfileAnalysis
         fit_result = self._fit_data_by_profile(profile_measurements=profile_measurements)
         rms_sizes = self._get_rms_sizes(fit_result, detector=rms_detector)
 
+        metadata = self.collection_result.metadata
+        metadata.rms_detector = rms_detector if rms_detector is not None else metadata.default_detector
+
         return WireMeasurementAnalysisResult(
             fit_result=fit_result,
             rms_sizes=rms_sizes,
             collection_result=self.collection_result,
-            metadata=self.collection_result.metadata,
+            metadata=metadata,
             profiles=profile_measurements,
         )
 
