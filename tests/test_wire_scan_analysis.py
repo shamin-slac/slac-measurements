@@ -17,6 +17,46 @@ from slac_measurements.wires.collection_results import (
 )
 
 
+def _make_detector_fit(
+    sigma: float,
+    *,
+    mean: float = 0.0,
+    amplitude: float = 1.0,
+    offset: float = 0.0,
+    curve: np.ndarray | None = None,
+    positions: np.ndarray | None = None,
+) -> DetectorFit:
+    return DetectorFit(
+        mean=mean,
+        sigma=sigma,
+        amplitude=amplitude,
+        offset=offset,
+        curve=np.array([1.0, 2.0]) if curve is None else curve,
+        positions=np.array([0.0, 1.0]) if positions is None else positions,
+    )
+
+
+def _make_fit_result(
+    sigma_map: dict[str, dict[str, float]],
+    *,
+    curve: np.ndarray | None = None,
+    positions: np.ndarray | None = None,
+) -> dict[str, FitResult]:
+    return {
+        profile: FitResult(
+            detectors={
+                detector: _make_detector_fit(
+                    sigma,
+                    curve=curve,
+                    positions=positions,
+                )
+                for detector, sigma in detector_sigmas.items()
+            }
+        )
+        for profile, detector_sigmas in sigma_map.items()
+    }
+
+
 class TestGetMonotonicIndices(TestCase):
     """Tests for the _get_monotonic_indices static method logic."""
 
@@ -280,32 +320,10 @@ class TestWireMeasurementAnalysisOtherMethods(TestCase):
 
     def test_get_rms_sizes_returns_expected_detector_sigmas(self):
         analysis = self._make_analysis(default_detector="D1")
-        fit_result = {
-            "x": FitResult(
-                detectors={
-                    "D1": DetectorFit(
-                        mean=0.0,
-                        sigma=1.25,
-                        amplitude=10.0,
-                        offset=0.0,
-                        curve=np.array([1.0, 2.0]),
-                        positions=np.array([0.0, 1.0]),
-                    )
-                }
-            ),
-            "y": FitResult(
-                detectors={
-                    "D1": DetectorFit(
-                        mean=0.0,
-                        sigma=2.5,
-                        amplitude=8.0,
-                        offset=0.0,
-                        curve=np.array([1.0, 2.0]),
-                        positions=np.array([0.0, 1.0]),
-                    )
-                }
-            ),
-        }
+        fit_result = _make_fit_result({
+            "x": {"D1": 1.25},
+            "y": {"D1": 2.5},
+        })
 
         x_rms, y_rms = analysis._get_rms_sizes(fit_result)
 
@@ -317,48 +335,10 @@ class TestWireMeasurementAnalysisOtherMethods(TestCase):
             default_detector="D1",
             detectors=["D1", "D2"],
         )
-        fit_result = {
-            "x": FitResult(
-                detectors={
-                    "D1": DetectorFit(
-                        mean=0.0,
-                        sigma=1.25,
-                        amplitude=10.0,
-                        offset=0.0,
-                        curve=np.array([1.0, 2.0]),
-                        positions=np.array([0.0, 1.0]),
-                    ),
-                    "D2": DetectorFit(
-                        mean=0.0,
-                        sigma=3.5,
-                        amplitude=11.0,
-                        offset=0.0,
-                        curve=np.array([1.0, 2.0]),
-                        positions=np.array([0.0, 1.0]),
-                    ),
-                }
-            ),
-            "y": FitResult(
-                detectors={
-                    "D1": DetectorFit(
-                        mean=0.0,
-                        sigma=2.5,
-                        amplitude=8.0,
-                        offset=0.0,
-                        curve=np.array([1.0, 2.0]),
-                        positions=np.array([0.0, 1.0]),
-                    ),
-                    "D2": DetectorFit(
-                        mean=0.0,
-                        sigma=4.5,
-                        amplitude=9.0,
-                        offset=0.0,
-                        curve=np.array([1.0, 2.0]),
-                        positions=np.array([0.0, 1.0]),
-                    ),
-                }
-            ),
-        }
+        fit_result = _make_fit_result({
+            "x": {"D1": 1.25, "D2": 3.5},
+            "y": {"D1": 2.5, "D2": 4.5},
+        })
 
         x_rms, y_rms = analysis._get_rms_sizes(fit_result, detector="D2")
 
@@ -367,20 +347,7 @@ class TestWireMeasurementAnalysisOtherMethods(TestCase):
 
     def test_get_rms_sizes_handles_missing_profiles(self):
         analysis = self._make_analysis(default_detector="D1")
-        fit_result = {
-            "x": FitResult(
-                detectors={
-                    "D1": DetectorFit(
-                        mean=0.0,
-                        sigma=1.1,
-                        amplitude=9.0,
-                        offset=0.0,
-                        curve=np.array([1.0]),
-                        positions=np.array([0.0]),
-                    )
-                }
-            )
-        }
+        fit_result = _make_fit_result({"x": {"D1": 1.1}})
 
         x_rms, y_rms = analysis._get_rms_sizes(fit_result)
 
@@ -410,18 +377,7 @@ class TestWireMeasurementAnalysisOtherMethods(TestCase):
             )
         }
         expected_fit_result = {
-            "x": FitResult(
-                detectors={
-                    "D1": DetectorFit(
-                        mean=0.5,
-                        sigma=1.0,
-                        amplitude=5.0,
-                        offset=0.0,
-                        curve=np.array([1.0, 2.0]),
-                        positions=np.array([0.0, 1.0]),
-                    )
-                }
-            )
+            "x": FitResult(detectors={"D1": _make_detector_fit(1.0, mean=0.5, amplitude=5.0)})
         }
 
         with patch.object(analysis, "_get_profile_range_indices", return_value=expected_indices) as mock_idx, patch.object(
@@ -463,48 +419,12 @@ class TestWireMeasurementAnalysisResult(TestCase):
             raw_data={"WIRE": np.array([0.0, 1.0])},
             metadata=metadata,
         )
-        fit_result = {
-            "x": FitResult(
-                detectors={
-                    "D1": DetectorFit(
-                        mean=0.0,
-                        sigma=1.25,
-                        amplitude=10.0,
-                        offset=0.0,
-                        curve=np.array([1.0, 2.0]),
-                        positions=np.array([0.0, 1.0]),
-                    ),
-                    "D2": DetectorFit(
-                        mean=0.0,
-                        sigma=3.5,
-                        amplitude=11.0,
-                        offset=0.0,
-                        curve=np.array([1.0, 2.0]),
-                        positions=np.array([0.0, 1.0]),
-                    ),
-                }
-            ),
-            "y": FitResult(
-                detectors={
-                    "D1": DetectorFit(
-                        mean=0.0,
-                        sigma=2.5,
-                        amplitude=8.0,
-                        offset=0.0,
-                        curve=np.array([1.0, 2.0]),
-                        positions=np.array([0.0, 1.0]),
-                    ),
-                    "D2": DetectorFit(
-                        mean=0.0,
-                        sigma=4.5,
-                        amplitude=9.0,
-                        offset=0.0,
-                        curve=np.array([1.0, 2.0]),
-                        positions=np.array([0.0, 1.0]),
-                    ),
-                }
-            ),
-        }
+        fit_result = _make_fit_result(
+            {
+                "x": {"D1": 1.25, "D2": 3.5},
+                "y": {"D1": 2.5, "D2": 4.5},
+            }
+        )
 
         return WireMeasurementAnalysisResult(
             fit_result=fit_result,
@@ -514,33 +434,37 @@ class TestWireMeasurementAnalysisResult(TestCase):
             metadata=metadata,
         )
 
-    def test_set_rms_detector_updates_rms_sizes_and_metadata(self):
-        result = self._make_result()
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls._result_template = cls._make_result()
 
-        result.set_rms_detector("D2")
+    def setUp(self):
+        # Use a deep copy of one shared template so tests remain isolated.
+        self.result = self._result_template.model_copy(deep=True)
+
+    def test_set_rms_detector_updates_rms_sizes_and_metadata(self):
+        self.result.set_rms_detector("D2")
 
         np.testing.assert_array_equal(
-            np.asarray(result.rms_sizes),
+            np.asarray(self.result.rms_sizes),
             np.array([3.5, 4.5], dtype=object),
         )
-        self.assertEqual(result.metadata.rms_detector, "D2")
-        self.assertEqual(result.collection_result.metadata.rms_detector, "D2")
+        self.assertEqual(self.result.metadata.rms_detector, "D2")
+        self.assertEqual(self.result.collection_result.metadata.rms_detector, "D2")
 
     def test_set_rms_detector_uses_default_when_detector_omitted(self):
-        result = self._make_result()
-        result.metadata.rms_detector = "D2"
-        result.collection_result.metadata.rms_detector = "D2"
+        self.result.metadata.rms_detector = "D2"
+        self.result.collection_result.metadata.rms_detector = "D2"
 
-        result.set_rms_detector()
+        self.result.set_rms_detector()
 
         np.testing.assert_array_equal(
-            np.asarray(result.rms_sizes),
+            np.asarray(self.result.rms_sizes),
             np.array([1.25, 2.5], dtype=object),
         )
-        self.assertEqual(result.metadata.rms_detector, "D1")
+        self.assertEqual(self.result.metadata.rms_detector, "D1")
 
     def test_set_rms_detector_raises_for_unknown_detector(self):
-        result = self._make_result()
-
         with self.assertRaises(ValueError):
-            result.set_rms_detector("D3")
+            self.result.set_rms_detector("D3")
