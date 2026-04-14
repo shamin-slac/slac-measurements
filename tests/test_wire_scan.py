@@ -136,10 +136,11 @@ class WireBeamProfileMeasurementTest(TestCase):
                 rms_detector="D2",
             )
 
-        mock_analyze.assert_called_once_with(
-            measurement,
-            fitting_method="gaussian",
-            rms_detector="D2",
+        mock_analyze.assert_called_once()
+        self.assertIs(mock_analyze.call_args.args[0], measurement)
+        self.assertEqual(
+            mock_analyze.call_args.kwargs,
+            {"fitting_method": "gaussian", "rms_detector": "D2"},
         )
 
     def test_analyze_raises_if_no_collection_result(self):
