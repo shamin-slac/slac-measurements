@@ -114,33 +114,33 @@ class WireBeamProfileMeasurementTest(TestCase):
         )
         mock_analysis.analyze.assert_called_once_with(rms_detector=None)
 
-    @patch("slac_measurements.wires.scan.WireMeasurementAnalysis")
-    def test_measure_passes_rms_detector_override(self, mock_analysis_cls):
-        mock_analysis = mock_analysis_cls.return_value
-        mock_analysis.analyze.return_value = "analysis-result"
+    # measure() constructs WireMeasurementCollection internally, so we patch
+    # it to keep this unit test isolated from collection setup behavior.
+    @patch("slac_measurements.wires.scan.WireMeasurementCollection")
+    def test_measure_passes_rms_detector_override(self, mock_collection_cls):
+        mock_collection_cls.return_value.measure.return_value = "collection-result"
 
-        with patch(
-            "slac_measurements.wires.scan.WireMeasurementCollection"
-        ) as mock_collection_cls:
-            mock_collection = mock_collection_cls.return_value
-            mock_collection.measure.return_value = "collection-result"
+        measurement = WireBeamProfileMeasurement(
+            beam_profile_device=self._make_wire_device(),
+            beampath="TEST",
+        )
 
-            measurement = WireBeamProfileMeasurement(
-                beam_profile_device=self._make_wire_device(),
-                beampath="TEST",
-            )
-
-            result = measurement.measure(
+        with patch.object(
+            WireBeamProfileMeasurement,
+            "analyze",
+            autospec=True,
+            return_value="analysis-result",
+        ) as mock_analyze:
+            measurement.measure(
                 fitting_method="gaussian",
                 rms_detector="D2",
             )
 
-        self.assertEqual(result, "analysis-result")
-        mock_analysis_cls.assert_called_once_with(
-            collection_result="collection-result",
+        mock_analyze.assert_called_once_with(
+            measurement,
             fitting_method="gaussian",
+            rms_detector="D2",
         )
-        mock_analysis.analyze.assert_called_once_with(rms_detector="D2")
 
     def test_analyze_raises_if_no_collection_result(self):
         measurement = WireBeamProfileMeasurement(
