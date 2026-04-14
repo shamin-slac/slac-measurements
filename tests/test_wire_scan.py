@@ -61,7 +61,7 @@ class WireBeamProfileMeasurementTest(TestCase):
             beam_profile_device=measurement.beam_profile_device,
             beampath="TEST",
         )
-        mock_collection.measure.assert_called_once_with(scan_type="step")
+        mock_collection.measure.assert_called_once_with(scan_mode="step")
         mock_analysis_cls.assert_called_once_with(
             collection_result="collection-result",
             fitting_method="super_gaussian",
@@ -88,7 +88,7 @@ class WireBeamProfileMeasurementTest(TestCase):
         result = measurement.measure(fitting_method="asymmetric_gaussian")
 
         self.assertEqual(result, "analysis-result")
-        mock_collection.measure.assert_called_once_with(scan_type="step")
+        mock_collection.measure.assert_called_once_with(scan_mode="step")
         mock_analysis_cls.assert_called_once_with(
             collection_result="collection-result",
             fitting_method="asymmetric_gaussian",
