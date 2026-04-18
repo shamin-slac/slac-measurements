@@ -34,13 +34,21 @@ class WireMeasurementAnalysis(slac_measurements.beam_profile.BeamProfileAnalysis
     model_config = ConfigDict(arbitrary_types_allowed=True)
     fitting_method: Literal["gaussian", "asymmetric_gaussian", "super_gaussian"] = "gaussian"
 
-    def analyze(self) -> WireMeasurementAnalysisResult:
+    def analyze(
+        self, rms_detector: str | None = None
+    ) -> WireMeasurementAnalysisResult:
         """
         Organize data by profile, fit beam profile curves, extract RMS sizes.
 
         Uses the configured fitting method (set via fitting_method parameter)
         to fit each detector's data. Available methods: 'gaussian',
         'asymmetric_gaussian', 'super_gaussian'.
+
+        Parameters
+        ----------
+        rms_detector : str, optional
+            Detector name used to extract RMS sizes. If omitted, uses
+            ``collection_result.metadata.default_detector``.
 
         Returns
         -------
@@ -52,13 +60,16 @@ class WireMeasurementAnalysis(slac_measurements.beam_profile.BeamProfileAnalysis
         profile_measurements = self._organize_data_by_profile(profile_indices)
 
         fit_result = self._fit_data_by_profile(profile_measurements=profile_measurements)
-        rms_sizes = self._get_rms_sizes(fit_result)
+        rms_sizes = self._get_rms_sizes(fit_result, detector=rms_detector)
+
+        metadata = self.collection_result.metadata
+        metadata.rms_detector = rms_detector if rms_detector is not None else metadata.default_detector
 
         return WireMeasurementAnalysisResult(
             fit_result=fit_result,
             rms_sizes=rms_sizes,
             collection_result=self.collection_result,
-            metadata=self.collection_result.metadata,
+            metadata=metadata,
             profiles=profile_measurements,
         )
 
@@ -341,30 +352,45 @@ class WireMeasurementAnalysis(slac_measurements.beam_profile.BeamProfileAnalysis
 
         return profile_indices
 
-    def _get_rms_sizes(self, fit_result: dict) -> tuple[float | None, float | None]:
+    def _get_rms_sizes(
+        self, fit_result: dict, detector: str | None = None
+    ) -> tuple[float | None, float | None]:
         """
         Extract RMS beam sizes from fit results.
 
         Computes RMS sizes from x and y profile fits using the
-        default detector.
+        requested detector, defaulting to the configured default detector.
 
         Parameters:
             fit_result (dict): Fit results from fit_data_by_profile().
+            detector (str | None): Detector name to use for RMS extraction.
 
         Returns:
             tuple[float | None, float | None]: (x_rms, y_rms) in meters.
             Returns (None, None) if neither profile is present.
         """
-        default_det = self.collection_result.metadata.default_detector
+        available_detectors = self.collection_result.metadata.detectors
+        selected_detector = (
+            self.collection_result.metadata.default_detector
+            if detector is None
+            else detector
+        )
+
+        if selected_detector not in available_detectors:
+            raise ValueError(
+                f"Detector '{selected_detector}' is not available in "
+                f"metadata.detectors={available_detectors}."
+            )
+
         x_rms = None
         y_rms = None
 
         if "x" in fit_result:
-            x_fit = fit_result["x"].detectors[default_det]
+            x_fit = fit_result["x"].detectors[selected_detector]
             x_rms = x_fit.sigma
 
         if "y" in fit_result:
-            y_fit = fit_result["y"].detectors[default_det]
+            y_fit = fit_result["y"].detectors[selected_detector]
             y_rms = y_fit.sigma
 
         return (x_rms, y_rms)

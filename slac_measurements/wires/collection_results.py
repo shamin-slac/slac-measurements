@@ -14,6 +14,7 @@ class MeasurementMetadata(BaseModel):
     beampath: str
     detectors: list[str]
     default_detector: str
+    rms_detector: Optional[str] = None
     scan_ranges: Dict[str, Tuple[int, int]]
     timestamp: datetime
     active_profiles: list[str]
@@ -84,6 +85,8 @@ class WireMeasurementCollectionResult(BeamProfileCollectionResult):
         group.attrs["area"] = meta.area
         group.attrs["beampath"] = meta.beampath
         group.attrs["default_detector"] = meta.default_detector
+        if meta.rms_detector is not None:
+            group.attrs["rms_detector"] = meta.rms_detector
         group.attrs["timestamp"] = meta.timestamp.isoformat()
         group.attrs["active_profiles"] = meta.active_profiles
         group.attrs["install_angle"] = meta.install_angle
@@ -158,6 +161,7 @@ def _load_metadata(group: h5py.Group) -> MeasurementMetadata:
     area = group.attrs["area"]
     beampath = group.attrs["beampath"]
     default_detector = group.attrs["default_detector"]
+    rms_detector = group.attrs.get("rms_detector", None)
     timestamp_str = group.attrs["timestamp"]
     timestamp = datetime.fromisoformat(timestamp_str)
     active_profiles = group.attrs["active_profiles"]
@@ -181,6 +185,7 @@ def _load_metadata(group: h5py.Group) -> MeasurementMetadata:
         beampath=beampath,
         detectors=detectors,
         default_detector=default_detector,
+        rms_detector=rms_detector,
         scan_ranges=scan_ranges,
         timestamp=timestamp,
         active_profiles=active_profiles,

@@ -1,5 +1,7 @@
 from typing import Dict
 
+import numpy as np
+
 from pydantic import BaseModel, ConfigDict
 
 from slac_measurements.beam_profile import (
@@ -49,6 +51,49 @@ class WireMeasurementAnalysisResult(BeamProfileMeasurementResult):
     collection_result: WireMeasurementCollectionResult
     profiles: Dict[str, ProfileMeasurement]
 
+    def set_rms_detector(self, detector: str | None = None) -> None:
+        """Mutate the result to use a different detector for RMS sizes.
+
+        Parameters
+        ----------
+        detector : str, optional
+            Detector name used to derive ``rms_sizes``. If omitted, the
+            metadata ``default_detector`` is used.
+        """
+
+        metadata = self.collection_result.metadata
+        selected_detector = (
+            metadata.default_detector if detector is None else detector
+        )
+
+        if selected_detector not in metadata.detectors:
+            raise ValueError(
+                f"Detector '{selected_detector}' is not available in "
+                f"metadata.detectors={metadata.detectors}."
+            )
+
+        x_rms = self._get_profile_rms(profile="x", detector=selected_detector)
+        y_rms = self._get_profile_rms(profile="y", detector=selected_detector)
+
+        self.rms_sizes = np.array([x_rms, y_rms], dtype=object)
+        self.metadata.rms_detector = selected_detector
+        self.collection_result.metadata.rms_detector = selected_detector
+
+    def _get_profile_rms(
+        self, profile: str, detector: str
+    ) -> float | None:
+        """Return the RMS size for a profile/detector pair, if present."""
+        if profile not in self.fit_result:
+            return None
+
+        if detector not in self.fit_result[profile].detectors:
+            raise ValueError(
+                f"Detector '{detector}' is not available in fit_result "
+                f"for profile '{profile}'."
+            )
+
+        return self.fit_result[profile].detectors[detector].sigma
+
     def __repr__(self) -> str:
         """Return a compact string representation of the analysis result."""
         meta = self.collection_result.metadata
@@ -64,6 +109,7 @@ class WireMeasurementAnalysisResult(BeamProfileMeasurementResult):
             f"wire_name='{meta.wire_name}', "
             f"beampath='{meta.beampath}', "
             f"rms_sizes={rms_sizes_repr}, "
+            f"rms_detector='{meta.rms_detector}', "
             f"profiles={profile_count}, "
             f"fit_profiles={fit_profile_count}, "
             f"detectors={detector_count}, "
@@ -97,7 +143,6 @@ class WireMeasurementAnalysisResult(BeamProfileMeasurementResult):
         # reuse imports locally to avoid adding h5py/np at top-level when
         # the module is imported purely for type information
         import h5py
-        import numpy as np
 
         with h5py.File(filepath, "w") as f:
             # store the collection result under its own subgroup so that
@@ -176,7 +221,6 @@ def load_from_h5(filepath: str) -> WireMeasurementAnalysisResult:
     """
 
     import h5py
-    import numpy as np
 
     # first load the collection result using the existing loader by
     # temporarily writing the subgroup to a temporary file-like object.

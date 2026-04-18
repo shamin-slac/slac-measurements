@@ -1,7 +1,6 @@
 import logging
 import time
 from datetime import datetime
-from importlib.resources import files
 from typing import Optional
 
 import numpy as np
@@ -20,9 +19,6 @@ from slac_measurements.wires.collection_results import (
 _DATE = datetime.now().strftime("%Y%m%d")
 _LOG_FILENAME = f"ws_log_{_DATE}.txt"
 _LOGGER_NAME = "wire_scan_logger"
-_WIRE_LBLMS_LOCATION = files("slac_db").joinpath(
-    "package_data", "wire_lblms.yaml"
-)
 _WIRE_TOLERANCE = 250  # microns
 
 
@@ -60,23 +56,23 @@ class WireMeasurementCollection(slac_measurements.beam_profile.BeamProfileMeasur
     def my_wire(self, value):
         self.beam_profile_device = value
 
-    def measure(self, scan_type: str = "step") -> WireMeasurementCollectionResult:
+    def measure(self, scan_mode: str = "step") -> WireMeasurementCollectionResult:
         """
         Execute wire scan: move wire, acquire detector data from BSA buffer.
 
         Two scan modes are supported:
-        - ``on_the_fly`` : use the wire's built-in start_scan command and
-          collect data while the wire moves continuously.
-        - ``step`` : perform a discrete (step) scan by moving the motor to each
-          inner/outer position in sequence with the buffer acquiring the whole
-          time.
+            - ``otf`` : On-the-fly scan using the wire's built-in start_scan command and
+              collect data while the wire moves continuously.
+            - ``step`` : perform a discrete (step) scan by moving the motor to each
+              inner/outer position in sequence with the buffer acquiring the whole
+              time.
 
-        The desired mode can be selected by passing ``scan_type``.
+        The desired mode can be selected by passing ``scan_mode``.
 
         Parameters
         ----------
-        scan_type : str, optional
-            ``"on_the_fly"`` or ``"step"``.  Any other value will raise a
+        scan_mode : str, optional
+            ``"otf"`` or ``"step"``. Any other value will raise a
             ``ValueError``.
 
         Returns
@@ -86,18 +82,18 @@ class WireMeasurementCollection(slac_measurements.beam_profile.BeamProfileMeasur
             - raw_data: Buffered position and detector values by device name
             - metadata: Timestamp, wire name, area, beampath, and detector list
         """
-        if scan_type not in ("on_the_fly", "step"):
+        if scan_mode not in ("otf", "step"):
             raise ValueError(
-                f"Unknown scan_type '{scan_type}'. ``on_the_fly`` or ``step`` expected."
+                f"Unknown scan_mode '{scan_mode}'. ``otf`` or ``step`` expected."
             )
 
         self.my_buffer = self._reserve_buffer()
         metadata = self._create_metadata()
-        self._scan_with_wire(scan_type=scan_type)
+        self._scan_with_wire(scan_mode=scan_mode)
 
         # For on‑the‑fly scans we must start the timing buffer here; the step
         # implementation already handles the buffer start and wait internally.
-        if scan_type == "on_the_fly":
+        if scan_mode == "otf":
             self._start_timing_buffer()
 
         # Get position and detector data from the buffer
@@ -202,23 +198,10 @@ class WireMeasurementCollection(slac_measurements.beam_profile.BeamProfileMeasur
         """
         Make additional metadata.
         """
-        def _load_yaml_config() -> Optional[dict]:
-            import yaml
-
-            file_to_open = _WIRE_LBLMS_LOCATION
-
-            if file_to_open.exists() is False:
-                msg = f"YAML config file {file_to_open} not found."
-                self.logger.error(msg)
-                return None
-
-            with file_to_open.open("r") as f:
-                wire_lblms = yaml.safe_load(f)
-                return wire_lblms
-
         def _get_default_detector() -> str:
-            lblm_config = _load_yaml_config()
-            if lblm_config is None:
+            default_detector = self.my_wire.metadata.default_detector
+
+            if not default_detector:
                 if not self.detectors:
                     msg = (
                         "No detectors available from wire metadata; "
@@ -227,9 +210,9 @@ class WireMeasurementCollection(slac_measurements.beam_profile.BeamProfileMeasur
                     self.logger.error(msg)
                     raise RuntimeError(msg)
                 return self.detectors[0]
-            else:
-                default_detector = lblm_config[self.my_wire.name]
-                return default_detector
+
+            # Metadata may be stored as "<name>:<area>"; analysis expects the device name key.
+            return default_detector.split(":", 1)[0]
 
         def _get_scan_ranges():
             return {
@@ -294,30 +277,35 @@ class WireMeasurementCollection(slac_measurements.beam_profile.BeamProfileMeasur
         self.logger.info("Data retrieved from buffer. Scan complete.")
         return data
 
-    def _initialize_wire_with_retry(self, wire_action: str, max_attempts: int = 3) -> None:
-        """Call start_scan/initialize with retries until wire.enabled.
+    def _initialize_wire_with_retry(self, scan_mode: str, max_attempts: int = 3) -> None:
+        """Initialize wire motion with retries until wire is ready for scan mode.
 
-        wire_action must be 'start_scan' or 'initialize'; raises on failure.
+        Readiness conditions:
+        - otf: wait for both my_wire.homed and my_wire.on_status.
+        - step: wait for my_wire.enabled.
+
+        scan_mode must be 'otf' or 'step'; raises on failure.
         """
-        if wire_action not in ("start_scan", "initialize"):
+        if scan_mode not in ("otf", "step"):
             raise ValueError(
-                f"Unknown wire_action '{wire_action}'. Expected 'start_scan' or 'initialize'."
+                f"Unknown scan_mode '{scan_mode}'. Expected 'otf' or 'step'."
             )
 
-        # Skip initialization if wire is already enabled
-        if self.my_wire.enabled:
-            self.logger.info(f"{self.my_wire.name} is already enabled.")
-            return
+        if scan_mode == "otf":
+            action_method = self.my_wire.start_scan
+            ready_check = lambda: self.my_wire.homed and self.my_wire.on_status
+            ready_desc = "homed and on"
+            action_desc = "for on-the-fly scan"
+        else:
+            action_method = self.my_wire.initialize
+            ready_check = lambda: self.my_wire.enabled
+            ready_desc = "enabled"
+            action_desc = "for step scan"
 
-        # Choose the appropriate method to call
-        action_method = (
-            self.my_wire.start_scan
-            if wire_action == "start_scan"
-            else self.my_wire.initialize
-        )
-        action_desc = (
-            "for on-the-fly scan" if wire_action == "start_scan" else "for step scan"
-        )
+        # Skip initialization if wire is already in the expected ready state
+        if ready_check():
+            self.logger.info(f"{self.my_wire.name} is already {ready_desc}.")
+            return
 
         for attempt in range(1, max_attempts + 1):
             self.logger.info(
@@ -327,8 +315,10 @@ class WireMeasurementCollection(slac_measurements.beam_profile.BeamProfileMeasur
             action_method()
 
             # If returns True within timeout, proceed
-            if slac_measurements.utils.wait_until(lambda: self.my_wire.enabled):
-                self.logger.info(f"{self.my_wire.name} initialized.")
+            if slac_measurements.utils.wait_until(ready_check):
+                self.logger.info(
+                    "%s initialized (%s is True).", self.my_wire.name, ready_desc
+                )
                 return
 
             # After timeout, log and iterate through for loop again
@@ -393,7 +383,7 @@ class WireMeasurementCollection(slac_measurements.beam_profile.BeamProfileMeasur
         self.logger.info("Performing step scan mode")
 
         # Initialize wire for step scan (with retry logic, no continuous motion)
-        self._initialize_wire_with_retry(wire_action="initialize")
+        self._initialize_wire_with_retry(scan_mode="step")
 
         # Start buffer acquisition after successful wire initialization
         self.logger.info("Starting buffer acquisition for step scan...")
@@ -425,11 +415,11 @@ class WireMeasurementCollection(slac_measurements.beam_profile.BeamProfileMeasur
 
         return self.my_buffer
 
-    def _scan_with_wire(self, scan_type: str = "step") -> None:
+    def _scan_with_wire(self, scan_mode: str = "step") -> None:
         """
         Kick off motion for the wire and (optionally) the buffer.
 
-        The behaviour depends on the requested ``scan_type``.  The default is
+        The behaviour depends on the requested ``scan_mode``.  The default is
         ``step`` which drives the wire to each of the inner/outer positions one
         at a time while the buffer is already running.  The latter is useful for
         setups where the wire cannot use the
@@ -437,19 +427,18 @@ class WireMeasurementCollection(slac_measurements.beam_profile.BeamProfileMeasur
 
         Parameters
         ----------
-        scan_type : str, optional
-            ``"on_the_fly"`` or ``"step"``.  ``step`` behaviour is the
-            historic default.
+        scan_mode : str, optional
+            ``"otf"`` or ``"step"``.
         """
         # Reserve a new buffer if necessary
         self.my_buffer = self._reserve_buffer()
 
-        if scan_type == "on_the_fly":
-            self._initialize_wire_with_retry(wire_action="start_scan")
-        elif scan_type == "step":
+        if scan_mode == "otf":
+            self._initialize_wire_with_retry(scan_mode="otf")
+        elif scan_mode == "step":
             self._perform_step_scan()
         else:
-            raise ValueError(f"Unsupported scan_type '{scan_type}'")
+            raise ValueError(f"Unsupported scan_mode '{scan_mode}'")
 
     def _start_timing_buffer(self) -> None:
         """

@@ -48,6 +48,7 @@ def reserve_buffer(
     elif beampath.startswith("CU"):
         return _reserve_edef_buffer(
             name=name,
+            beampath=beampath,
             user=user,
             n_measurements=_calculate_buffer_points(pulses, beam_rate),
             logger=logger,
@@ -122,14 +123,25 @@ def _reserve_bsa_buffer(
 
 def _reserve_edef_buffer(
     name: str,
+    beampath: str,
     user: str,
     n_measurements: int,
     logger: logging.Logger = None,
 ):
+    
+    def _choose_beamcode(beampath):
+        if beampath.startswith("CU_HXR"):
+            return 1
+        elif beampath.startswith("CU_SXR"):
+            return 2
+        else:
+            raise BufferError(f"Unrecognized beampath for eDef: {beampath}")
+
     import edef
 
     buf = edef.EventDefinition(name=name, user=user)
     buf.n_measurements = n_measurements
+    buf.beamcode = _choose_beamcode(beampath)
     if logger:
         logger.info("Reserved eDef Buffer %s.", buf.number)
     return buf

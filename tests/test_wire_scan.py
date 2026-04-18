@@ -61,7 +61,7 @@ class WireBeamProfileMeasurementTest(TestCase):
             beam_profile_device=measurement.beam_profile_device,
             beampath="TEST",
         )
-        mock_collection.measure.assert_called_once_with(scan_type="step")
+        mock_collection.measure.assert_called_once_with(scan_mode="step")
         mock_analysis_cls.assert_called_once_with(
             collection_result="collection-result",
             fitting_method="super_gaussian",
@@ -88,7 +88,7 @@ class WireBeamProfileMeasurementTest(TestCase):
         result = measurement.measure(fitting_method="asymmetric_gaussian")
 
         self.assertEqual(result, "analysis-result")
-        mock_collection.measure.assert_called_once_with(scan_type="step")
+        mock_collection.measure.assert_called_once_with(scan_mode="step")
         mock_analysis_cls.assert_called_once_with(
             collection_result="collection-result",
             fitting_method="asymmetric_gaussian",
@@ -111,6 +111,36 @@ class WireBeamProfileMeasurementTest(TestCase):
         mock_analysis_cls.assert_called_once_with(
             collection_result=measurement.collection_result,
             fitting_method="super_gaussian",
+        )
+        mock_analysis.analyze.assert_called_once_with(rms_detector=None)
+
+    # measure() constructs WireMeasurementCollection internally, so we patch
+    # it to keep this unit test isolated from collection setup behavior.
+    @patch("slac_measurements.wires.scan.WireMeasurementCollection")
+    def test_measure_passes_rms_detector_override(self, mock_collection_cls):
+        mock_collection_cls.return_value.measure.return_value = "collection-result"
+
+        measurement = WireBeamProfileMeasurement(
+            beam_profile_device=self._make_wire_device(),
+            beampath="TEST",
+        )
+
+        with patch.object(
+            WireBeamProfileMeasurement,
+            "analyze",
+            autospec=True,
+            return_value="analysis-result",
+        ) as mock_analyze:
+            measurement.measure(
+                fitting_method="gaussian",
+                rms_detector="D2",
+            )
+
+        mock_analyze.assert_called_once()
+        self.assertIs(mock_analyze.call_args.args[0], measurement)
+        self.assertEqual(
+            mock_analyze.call_args.kwargs,
+            {"fitting_method": "gaussian", "rms_detector": "D2"},
         )
 
     def test_analyze_raises_if_no_collection_result(self):
