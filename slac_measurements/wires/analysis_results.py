@@ -145,6 +145,13 @@ class WireMeasurementAnalysisResult(BeamProfileMeasurementResult):
         import h5py
 
         with h5py.File(filepath, "w") as f:
+            def _to_h5_float_array(values) -> np.ndarray:
+                """Convert optional numeric-like values to float array for HDF5."""
+                return np.array(
+                    [np.nan if value is None else float(value) for value in values],
+                    dtype=float,
+                )
+
             # store the collection result under its own subgroup so that
             # standalone collection loaders can still operate if needed
             col_grp = f.create_group("collection_result")
@@ -163,7 +170,10 @@ class WireMeasurementAnalysisResult(BeamProfileMeasurementResult):
             # save the beam profile measurement fields inherited from
             # BeamProfileMeasurementResult
             if self.rms_sizes is not None:
-                f.create_dataset("rms_sizes", data=np.array(self.rms_sizes))
+                f.create_dataset(
+                    "rms_sizes",
+                    data=_to_h5_float_array(self.rms_sizes),
+                )
             if self.centroids is not None:
                 f.create_dataset("centroids", data=np.array(self.centroids))
             if self.total_intensities is not None:
@@ -232,7 +242,11 @@ def load_from_h5(filepath: str) -> WireMeasurementAnalysisResult:
 
         # beam profile fields
         rms = f.get("rms_sizes")
-        rms_val = tuple(rms[:]) if rms is not None else None
+        rms_val = (
+            tuple(None if np.isnan(v) else float(v) for v in rms[:])
+            if rms is not None
+            else None
+        )
         centroids = f.get("centroids")
         cent_val = centroids[:] if centroids is not None else None
         totint = f.get("total_intensities")
