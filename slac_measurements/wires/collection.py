@@ -20,6 +20,7 @@ _DATE = datetime.now().strftime("%Y%m%d")
 _LOG_FILENAME = f"ws_log_{_DATE}.txt"
 _LOGGER_NAME = "wire_scan_logger"
 _WIRE_TOLERANCE = 250  # microns
+_WIRE_RETRACT_WAIT = 2 # seconds
 
 
 class WireMeasurementCollection(slac_measurements.beam_profile.BeamProfileMeasurement):
@@ -397,7 +398,10 @@ class WireMeasurementCollection(slac_measurements.beam_profile.BeamProfileMeasur
         # Retract wire
         self.logger.info("Retracting wire...")
         self.my_wire.speed = int(self.my_wire.speed_max)
-        self.my_wire.motor = 100
+        time.sleep(_WIRE_RETRACT_WAIT)  # Ensure speed change takes effect before retracting
+        self.my_wire.retract()
+        retract_posn = self.my_wire.motor_rbv
+        self.logger.info(f"Wire retraction command issued. Motor position: {retract_posn}")
 
         # Wait for buffer acquisition to complete
         self.logger.info("Waiting for buffer acquisition to complete...")
