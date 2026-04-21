@@ -1,5 +1,6 @@
 import numpy as np
 from datetime import datetime
+from tempfile import TemporaryDirectory
 from unittest import TestCase
 from unittest.mock import patch
 
@@ -10,6 +11,7 @@ from slac_measurements.wires.analysis_results import (
     FitResult,
     ProfileMeasurement,
     WireMeasurementAnalysisResult,
+    load_from_h5,
 )
 from slac_measurements.wires.collection_results import (
     MeasurementMetadata,
@@ -468,3 +470,13 @@ class TestWireMeasurementAnalysisResult(TestCase):
     def test_set_rms_detector_raises_for_unknown_detector(self):
         with self.assertRaises(ValueError):
             self.result.set_rms_detector("D3")
+
+    def test_save_to_h5_handles_object_rms_sizes(self):
+        self.result.rms_sizes = np.array([1.25, None], dtype=object)
+
+        with TemporaryDirectory() as tmpdir:
+            outpath = f"{tmpdir}/analysis_result.h5"
+            self.result.save_to_h5(outpath)
+            loaded = load_from_h5(outpath)
+
+        self.assertEqual(tuple(loaded.rms_sizes), (1.25, None))
