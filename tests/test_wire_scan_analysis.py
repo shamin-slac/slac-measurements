@@ -479,4 +479,4 @@ class TestWireMeasurementAnalysisResult(TestCase):
             self.result.save_to_h5(outpath)
             loaded = load_from_h5(outpath)
 
-        self.assertEqual(loaded.rms_sizes, (1.25, None))
+        self.assertEqual(tuple(loaded.rms_sizes), (1.25, None))
