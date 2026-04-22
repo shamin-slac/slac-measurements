@@ -34,5 +34,4 @@ class OTFWireMeasurementCollection(BaseWireMeasurementCollection):
 
         self.logger.info("Performing on-the-fly scan mode")
         self._initialize_wire_with_retry(scan_mode="otf")
-        self.logger.info("Starting buffer acquisition for on-the-fly scan...")
         _start_timing_buffer()
