@@ -79,9 +79,11 @@ class StepWireMeasurementCollection(BaseWireMeasurementCollection):
         time.sleep(_WIRE_RETRACT_WAIT) # Wait for controller to stop moving
         self.my_wire.retract()
         time.sleep(_WIRE_RETRACT_WAIT) # Wait for wire to retract
+
+        wire_position = self.my_wire.motor_rbv
         self.logger.info(
             "Wire retraction command issued. Motor position: %s",
-            self.my_wire.motor_rbv,
+            wire_position,
         )
 
         self.logger.info("Waiting for buffer acquisition to complete...")
