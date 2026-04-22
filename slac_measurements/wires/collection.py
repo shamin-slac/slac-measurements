@@ -1,6 +1,7 @@
 import logging
 from abc import ABC, abstractmethod
 from datetime import datetime
+from pathlib import Path
 from typing import Literal, Optional
 
 import numpy as np
@@ -16,8 +17,9 @@ from slac_measurements.wires.collection_results import (
     WireMeasurementCollectionResult,
 )
 
-_DATE = datetime.now().strftime("%Y%m%d")
-_LOG_FILENAME = f"ws_log_{_DATE}.txt"
+_LOG_DIR = Path("/u1/lcls/physics/data/wire_scan/logs")
+_LOG_FILENAME = f"ws_log_{datetime.now().strftime('%Y%m%d')}.txt"
+_LOG_FILEPATH = _LOG_DIR / _LOG_FILENAME
 _LOGGER_NAME = "wire_scan_logger"
 ScanMode = Literal["step", "otf"]
 
@@ -207,6 +209,8 @@ class BaseWireMeasurementCollection(
 
     @model_validator(mode="after")
     def _run_setup(self) -> Self:
+        """Initialize logger, reserve buffer, and build devices/metadata."""
+
         import slac_measurements.logger.file_logger
 
         def _create_device_dictionary() -> dict:
@@ -308,7 +312,7 @@ class BaseWireMeasurementCollection(
 
         # Configure logger
         self.logger = slac_measurements.logger.file_logger.custom_logger(
-            log_file=_LOG_FILENAME,
+            log_file=str(_LOG_FILEPATH),
             name=_LOGGER_NAME,
         )
         self.logger.propagate = False
