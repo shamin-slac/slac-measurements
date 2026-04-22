@@ -106,7 +106,6 @@ class BaseWireMeasurementCollection(
         return self
 
     def _create_device_dictionary(self) -> dict:
-        # TODO: Move to its own module
         """
         Creates a device dictionary for a wire scan setup.  Includes the wire
         device and any associated detectors from metadata.
@@ -192,7 +191,6 @@ class BaseWireMeasurementCollection(
                 "y": self.my_wire.y_range,
                 "u": self.my_wire.u_range,
             }
-
         return MeasurementMetadata(
             wire_name=self.my_wire.name,
             buffer_number=self.my_buffer.number,
