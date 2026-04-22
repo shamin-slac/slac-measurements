@@ -14,8 +14,10 @@ class StepWireMeasurementCollection(BaseWireMeasurementCollection):
     def _run_collection_scan(self) -> None:
         """Run a step scan: init wire, start buffer, move positions, retract, wait."""
 
-        def _calculate_step_speed(position_index: int, positions: list[int]) -> int:
+        def _calculate_step_speed(position_index: int,
+                                  positions: list[int]) -> int:
             """Return speed for a step position: max for inner, computed for outer."""
+
             if position_index % 2 == 0:
                 return int(self.my_wire.speed_max)
 
@@ -25,6 +27,7 @@ class StepWireMeasurementCollection(BaseWireMeasurementCollection):
 
         def _get_step_positions() -> list[int]:
             """Return sorted inner and outer positions for active profiles."""
+
             positions = []
             for profile in self.my_wire.active_profiles():
                 for mode in ["inner", "outer"]:
@@ -32,14 +35,14 @@ class StepWireMeasurementCollection(BaseWireMeasurementCollection):
                     positions.append(getattr(self.my_wire, attr_name))
             return sorted(positions)
 
-        def _move_to_step_position(
-            *,
+        def _move_to_step_position(*,
             position: int,
             position_index: int,
             total_positions: int,
             positions: list[int],
         ) -> None:
             """Move wire to a step position and wait for arrival."""
+
             self.logger.info(
                 "Moving wire to %s (step %s/%s)...",
                 position,

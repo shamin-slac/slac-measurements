@@ -11,6 +11,7 @@ class OTFWireMeasurementCollection(BaseWireMeasurementCollection):
 
         def _start_timing_buffer() -> None:
             """Start BSA buffer and wait for completion while logging wire position."""
+
             self.logger.info("Starting buffer acquisition for on-the-fly scan...")
             acquisition_start = time.monotonic()
             self.my_buffer.start()
