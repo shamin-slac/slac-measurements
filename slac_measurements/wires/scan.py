@@ -22,7 +22,7 @@ class WireBeamProfileMeasurement(
     collection_result: Optional[WireMeasurementCollectionResult] = None
 
     def measure(self,
-                scan_mode: ScanMode = "step",
+                scan_mode: ScanMode = "otf",
                 fitting_method: FittingMethod = "gaussian",
                 rms_detector: Optional[str] = None,
     ) -> WireMeasurementAnalysisResult:
