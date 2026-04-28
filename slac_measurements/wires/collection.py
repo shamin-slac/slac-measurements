@@ -234,44 +234,51 @@ class BaseWireMeasurementCollection(
         """Initialize wire motion with retries until wire is ready for scan mode.
 
         Readiness conditions:
-        - otf: wait for both my_wire.homed and my_wire.on_status.
-        - step: wait for my_wire.enabled.
+        - otf: start_scan is always called to arm the wire, then wait for
+               my_wire.homed and my_wire.on_status.
+        - step: skip my_wire.initialize if wire is already enabled; otherwise
+               initialize and wait for my_wire.enabled.
 
         scan_mode must be 'otf' or 'step'; raises on failure.
         """
 
         if scan_mode == "otf":
-            action_method = self.my_wire.start_scan
-            ready_check = lambda: self.my_wire.homed and self.my_wire.on_status
-            ready_desc = "homed and on"
-            action_desc = "for on-the-fly scan"
-        elif scan_mode == "step":
-            action_method = self.my_wire.initialize
-            ready_check = lambda: self.my_wire.enabled
-            ready_desc = "enabled"
-            action_desc = "for step scan"
-
-        # Skip initialization if wire is already in the expected ready state
-        if ready_check():
-            self.logger.info("%s is already %s.", self.my_wire.name, ready_desc)
-            return
-
-        for attempt in range(1, max_attempts + 1):
-            self.logger.info(
-                "Initializing %s %s: (Attempt %s/%s)...",
-                self.my_wire.name, action_desc, attempt, max_attempts,
-            )
-            action_method()
-
-            # If returns True within timeout, proceed
-            if slac_measurements.utils.wait_until(ready_check):
+            # start_scan must always be called to arm the wire for OTF motion —
+            # even if homed/on_status are already True from a prior run.
+            for attempt in range(1, max_attempts + 1):
                 self.logger.info(
-                    "%s initialized (%s is True).", self.my_wire.name, ready_desc
+                    "Starting OTF scan on %s (Attempt %s/%s)...",
+                    self.my_wire.name, attempt, max_attempts,
                 )
+                self.my_wire.start_scan()
+
+                if slac_measurements.utils.wait_until(
+                    lambda: self.my_wire.homed and self.my_wire.on_status
+                ):
+                    self.logger.info("%s is homed and on.", self.my_wire.name)
+                    return
+
+                self.logger.warning(
+                    "%s did not become homed and on - retrying...", self.my_wire.name
+                )
+
+        elif scan_mode == "step":
+            # initialize is idempotent — skip if wire is already enabled.
+            if self.my_wire.enabled:
+                self.logger.info("%s is already enabled.", self.my_wire.name)
                 return
 
-            # After timeout, log and iterate through for loop again
-            else:
+            for attempt in range(1, max_attempts + 1):
+                self.logger.info(
+                    "Initializing %s for step scan (Attempt %s/%s)...",
+                    self.my_wire.name, attempt, max_attempts,
+                )
+                self.my_wire.initialize()
+
+                if slac_measurements.utils.wait_until(lambda: self.my_wire.enabled):
+                    self.logger.info("%s initialized (enabled is True).", self.my_wire.name)
+                    return
+
                 self.logger.warning(
                     "%s did not enable - retrying...", self.my_wire.name
                 )
