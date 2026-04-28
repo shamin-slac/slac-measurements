@@ -65,11 +65,12 @@ class BaseWireMeasurementCollection(
         def _release_buffer_safely() -> None:
             """Release timing buffer after scan completion."""
 
-            if self.my_buffer is not None:
+            buf = self.my_buffer
+            if buf is not None:
+                buffer_number = getattr(buf, "number", None)
                 try:
-                    buffer_number = self.my_buffer.number
                     self.logger.info("Releasing timing buffer %s.", buffer_number)
-                    self.my_buffer.release()
+                    buf.release()
                 except Exception:
                     self.logger.exception("Failed while releasing timing buffer %s.", buffer_number)
                 finally:
