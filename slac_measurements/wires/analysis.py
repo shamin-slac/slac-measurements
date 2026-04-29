@@ -158,7 +158,7 @@ class WireMeasurementAnalysis(slac_measurements.beam_profile.BeamProfileAnalysis
                 filter_size (int): Median filter size (default 5).
 
             Returns:
-                tuple: (windowed_x, windowed_y).
+                tuple: (windowed_x, windowed_y)
             """
 
             x = np.asarray(x)
