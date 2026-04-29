@@ -106,15 +106,6 @@ class BaseWireMeasurementCollection(
             metadata=self.metadata,
         )
 
-    # alias so beam_profile_device can also be accessed with name my_wire
-    @property
-    def my_wire(self) -> Wire:
-        return self.beam_profile_device
-
-    @my_wire.setter
-    def my_wire(self, value):
-        self.beam_profile_device = value
-
     def _create_device_dictionary(self) -> dict:
         """Create dictionary of required devices. Includes the wire device and detectors."""
 
@@ -127,9 +118,9 @@ class BaseWireMeasurementCollection(
             if name == "TMITLOSS":
                 return slac_measurements.tmit_loss.TMITLoss(
                     my_buffer=self.my_buffer,
-                    my_wire=self.my_wire,
+                    my_wire=self.beam_profile_device,
                     beampath=self.beampath,
-                    region=self.my_wire.area,
+                    region=self.beam_profile_device.area,
                 )
 
             create_by_prefix = {
@@ -158,9 +149,9 @@ class BaseWireMeasurementCollection(
 
         self.logger.info("Creating device dictionary...")
 
-        devices = {self.my_wire.name: self.my_wire}
+        devices = {self.beam_profile_device.name: self.beam_profile_device}
 
-        for ds in self.my_wire.metadata.detectors:
+        for ds in self.beam_profile_device.metadata.detectors:
             name, area = ds.split(":")
             detector = _instantiate_device(name, area)
             if detector is not None:
@@ -175,7 +166,7 @@ class BaseWireMeasurementCollection(
         def _get_default_detector() -> str:
             """Determine the default detector for analysis from wire metadata or device list."""
 
-            default_detector = self.my_wire.metadata.default_detector
+            default_detector = self.beam_profile_device.metadata.default_detector
 
             if not default_detector:
                 if not self.detectors:
@@ -193,22 +184,22 @@ class BaseWireMeasurementCollection(
             """Return dictionary of scan ranges for x, y, and u motors."""
 
             return {
-                "x": self.my_wire.x_range,
-                "y": self.my_wire.y_range,
-                "u": self.my_wire.u_range,
+                "x": self.beam_profile_device.x_range,
+                "y": self.beam_profile_device.y_range,
+                "u": self.beam_profile_device.u_range,
             }
 
         return MeasurementMetadata(
-            wire_name=self.my_wire.name,
+            wire_name=self.beam_profile_device.name,
             buffer_number=self.my_buffer.number,
-            area=self.my_wire.area,
+            area=self.beam_profile_device.area,
             beampath=self.beampath,
             detectors=self.detectors,
             default_detector=_get_default_detector(),
             scan_ranges=_get_scan_ranges(),
             timestamp=None,
-            active_profiles=self.my_wire.active_profiles(),
-            install_angle=self.my_wire.install_angle,
+            active_profiles=self.beam_profile_device.active_profiles(),
+            install_angle=self.beam_profile_device.install_angle,
             notes=None,
         )
 
@@ -218,7 +209,7 @@ class BaseWireMeasurementCollection(
         def _get_buffer_collection_method(device_name: str) -> str | None:
             """Determine the buffer collection method for a given device based on its name."""
 
-            if device_name == self.my_wire.name:
+            if device_name == self.beam_profile_device.name:
                 return "position_buffer"
             elif device_name.startswith("LBLM"):
                 return "fast_buffer"
@@ -254,8 +245,8 @@ class BaseWireMeasurementCollection(
             self.my_buffer = slac_measurements.wires.buffer.reserve_buffer(
                 beampath=self.beampath,
                 logger=self.logger,
-                pulses=self.my_wire.scan_pulses,
-                beam_rate=self.my_wire.beam_rate,
+                pulses=self.beam_profile_device.scan_pulses,
+                beam_rate=self.beam_profile_device.beam_rate,
             )
 
         return self.my_buffer
@@ -269,7 +260,7 @@ class BaseWireMeasurementCollection(
                 f"Invalid buffer point count for timeout calculation: {n_points}"
             )
 
-        min_expected_s = n_points / self.my_wire.beam_rate
+        min_expected_s = n_points / self.beam_profile_device.beam_rate
         return max(
             min_expected_s * _ACQUISITION_TIMEOUT_MARGIN,
             min_expected_s + _ACQUISITION_TIMEOUT_MIN_EXTRA_S,
@@ -301,7 +292,9 @@ class BaseWireMeasurementCollection(
         self.logger.propagate = False
 
         # Get list of detector names from wire metadata
-        self.detectors = [d.split(":")[0] for d in self.my_wire.metadata.detectors]
+        self.detectors = [
+            d.split(":")[0] for d in self.beam_profile_device.metadata.detectors
+        ]
         return self
 
 

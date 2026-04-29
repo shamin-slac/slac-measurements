@@ -16,24 +16,26 @@ class OTFWireMeasurementCollection(BaseWireMeasurementCollection):
         for attempt in range(1, max_attempts + 1):
             self.logger.info(
                 "Starting OTF scan on %s (Attempt %s/%s)...",
-                self.my_wire.name,
+                self.beam_profile_device.name,
                 attempt,
                 max_attempts,
             )
-            self.my_wire.start_scan()
+            self.beam_profile_device.start_scan()
 
             if slac_measurements.utils.wait_until(
-                lambda: self.my_wire.homed and self.my_wire.on_status
+                lambda: self.beam_profile_device.homed
+                and self.beam_profile_device.on_status
             ):
-                self.logger.info("%s is homed and on.", self.my_wire.name)
+                self.logger.info("%s is homed and on.", self.beam_profile_device.name)
                 return
 
             self.logger.warning(
-                "%s did not become homed and on - retrying...", self.my_wire.name
+                "%s did not become homed and on - retrying...",
+                self.beam_profile_device.name,
             )
 
         raise RuntimeError(
-            f"Failed to initialize {self.my_wire.name} after {max_attempts} attempts."
+            f"Failed to initialize {self.beam_profile_device.name} after {max_attempts} attempts."
         )
 
     def _run_collection_scan(self) -> None:
@@ -59,7 +61,7 @@ class OTFWireMeasurementCollection(BaseWireMeasurementCollection):
                     )
                 time.sleep(0.1)
                 if i % 10 == 0:
-                    wire_position = self.my_wire.motor_rbv
+                    wire_position = self.beam_profile_device.motor_rbv
                     self.logger.info("Wire position: %s", wire_position)
                 i += 1
 
