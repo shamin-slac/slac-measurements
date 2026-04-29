@@ -19,6 +19,8 @@ from slac_measurements.wires.collection_results import (
 
 _LOG_DIR = Path("/u1/lcls/physics/data/wire_scan/logs")
 _LOGGER_NAME = "wire_scan_logger"
+_ACQUISITION_TIMEOUT_MARGIN = 1.25
+_ACQUISITION_TIMEOUT_MIN_EXTRA_S = 10.0
 ScanMode = Literal["step", "otf"]
 
 
@@ -54,6 +56,12 @@ class BaseWireMeasurementCollection(
         Execute wire scan: run mode-specific wire motion and acquire detector
         data from timing buffer.
 
+        Two scan modes are supported:
+            - ``otf`` : On-the-fly scan using the wire's built-in start_scan command and
+              collect data while the wire moves continuously.
+            - ``step`` : perform a discrete (step) scan by moving the motor to each
+              inner/outer position in sequence.
+
         Returns
         -------
         WireMeasurementCollectionResult
@@ -61,6 +69,13 @@ class BaseWireMeasurementCollection(
             - raw_data: Buffered position and detector values by device name
             - metadata: Timestamp, wire name, area, beampath, and detector list
         """
+
+        def _prepare_runtime_state() -> None:
+            """Prepare per-run state that depends on an active timing buffer."""
+
+            self.my_buffer = self._reserve_buffer()
+            self.devices = self._create_device_dictionary()
+            self.metadata = self._create_metadata()
 
         def _release_buffer_safely() -> None:
             """Release timing buffer after scan completion."""
@@ -76,9 +91,8 @@ class BaseWireMeasurementCollection(
                 finally:
                     self.my_buffer = None
 
-        self._prepare_runtime_state()
-
         try:
+            _prepare_runtime_state()
             self._run_collection_scan()
             self.data = self._get_data_from_buffer()
             self.metadata.timestamp = datetime.now()
@@ -227,72 +241,7 @@ class BaseWireMeasurementCollection(
         self.logger.info("Data retrieved from buffer. Scan complete.")
         return data
 
-    def _initialize_wire_with_retry(self,
-        scan_mode: ScanMode,
-        max_attempts: int = 3,
-    ) -> None:
-        """Initialize wire motion with retries until wire is ready for scan mode.
 
-        Readiness conditions:
-        - otf: start_scan is always called to arm the wire, then wait for
-               my_wire.homed and my_wire.on_status.
-        - step: skip my_wire.initialize if wire is already enabled; otherwise
-               initialize and wait for my_wire.enabled.
-
-        scan_mode must be 'otf' or 'step'; raises on failure.
-        """
-
-        if scan_mode == "otf":
-            # start_scan must always be called to arm the wire for OTF motion —
-            # even if homed/on_status are already True from a prior run.
-            for attempt in range(1, max_attempts + 1):
-                self.logger.info(
-                    "Starting OTF scan on %s (Attempt %s/%s)...",
-                    self.my_wire.name, attempt, max_attempts,
-                )
-                self.my_wire.start_scan()
-
-                if slac_measurements.utils.wait_until(
-                    lambda: self.my_wire.homed and self.my_wire.on_status
-                ):
-                    self.logger.info("%s is homed and on.", self.my_wire.name)
-                    return
-
-                self.logger.warning(
-                    "%s did not become homed and on - retrying...", self.my_wire.name
-                )
-
-        elif scan_mode == "step":
-            # initialize is idempotent — skip if wire is already enabled.
-            if self.my_wire.enabled:
-                self.logger.info("%s is already enabled.", self.my_wire.name)
-                return
-
-            for attempt in range(1, max_attempts + 1):
-                self.logger.info(
-                    "Initializing %s for step scan (Attempt %s/%s)...",
-                    self.my_wire.name, attempt, max_attempts,
-                )
-                self.my_wire.initialize()
-
-                if slac_measurements.utils.wait_until(lambda: self.my_wire.enabled):
-                    self.logger.info("%s initialized (enabled is True).", self.my_wire.name)
-                    return
-
-                self.logger.warning(
-                    "%s did not enable - retrying...", self.my_wire.name
-                )
-
-        raise RuntimeError(
-            f"Failed to initialize {self.my_wire.name} after {max_attempts} attempts."
-        )
-
-    def _prepare_runtime_state(self) -> None:
-        """Prepare per-run state that depends on an active timing buffer."""
-
-        self.my_buffer = self._reserve_buffer()
-        self.devices = self._create_device_dictionary()
-        self.metadata = self._create_metadata()
 
     def _reserve_buffer(self) -> object:
         """Reserve a timing buffer for the scan based on beampath and wire metadata."""
@@ -307,6 +256,21 @@ class BaseWireMeasurementCollection(
 
         return self.my_buffer
 
+    def _calculate_acquisition_timeout_s(self) -> float:
+        """Return timeout above minimum expected buffer acquisition time."""
+
+        n_points = getattr(self.my_buffer, "n_measurements", None)
+        if n_points is None or n_points <= 0:
+            raise RuntimeError(
+                f"Invalid buffer point count for timeout calculation: {n_points}"
+            )
+
+        min_expected_s = n_points / self.my_wire.beam_rate
+        return max(
+            min_expected_s * _ACQUISITION_TIMEOUT_MARGIN,
+            min_expected_s + _ACQUISITION_TIMEOUT_MIN_EXTRA_S,
+        )
+
     @abstractmethod
     def _run_collection_scan(self) -> None:
         """Run mode-specific wire motion and buffer timing behavior."""
@@ -316,6 +280,12 @@ class BaseWireMeasurementCollection(
         """Initialize construction-time state for a collection instance."""
 
         import slac_measurements.logger.file_logger
+
+        if not _LOG_DIR.exists():
+            raise FileNotFoundError(
+                f"Log directory does not exist: {_LOG_DIR}. "
+                "Create it or configure a valid existing path."
+            )
 
         # Configure logger — compute filename now so long-running processes
         # get a fresh date-stamped file rather than the one frozen at import.
