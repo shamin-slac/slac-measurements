@@ -35,6 +35,33 @@ class StepWireMeasurementCollection(BaseWireMeasurementCollection):
                     positions.append(getattr(self.my_wire, attr_name))
             return sorted(positions)
 
+        def _initialize_step_with_retry(max_attempts: int = 3) -> None:
+            """Initialize wire for step scan mode with retries until enabled."""
+
+            # initialize is idempotent — skip if wire is already enabled.
+            if self.my_wire.enabled:
+                self.logger.info("%s is already enabled.", self.my_wire.name)
+                return
+
+            for attempt in range(1, max_attempts + 1):
+                self.logger.info(
+                    "Initializing %s for step scan (Attempt %s/%s)...",
+                    self.my_wire.name,
+                    attempt,
+                    max_attempts,
+                )
+                self.my_wire.initialize()
+
+                if slac_measurements.utils.wait_until(lambda: self.my_wire.enabled):
+                    self.logger.info("%s initialized (enabled is True).", self.my_wire.name)
+                    return
+
+                self.logger.warning("%s did not enable - retrying...", self.my_wire.name)
+
+            raise RuntimeError(
+                f"Failed to initialize {self.my_wire.name} after {max_attempts} attempts."
+            )
+
         def _move_to_step_position(*,
             position: int,
             position_index: int,
@@ -62,10 +89,11 @@ class StepWireMeasurementCollection(BaseWireMeasurementCollection):
 
         self.logger.info("Performing step scan mode")
 
-        self._initialize_wire_with_retry(scan_mode="step")
+        _initialize_step_with_retry()
 
         self.logger.info("Starting buffer acquisition for step scan...")
         acquisition_start = time.monotonic()
+        acquisition_timeout_s = self._calculate_acquisition_timeout_s()
         self.my_buffer.start()
 
         positions = _get_step_positions()
@@ -92,6 +120,12 @@ class StepWireMeasurementCollection(BaseWireMeasurementCollection):
         self.logger.info("Waiting for buffer acquisition to complete...")
         
         while not self.my_buffer.is_acquisition_complete():
+            elapsed_s = time.monotonic() - acquisition_start
+            if elapsed_s > acquisition_timeout_s:
+                raise TimeoutError(
+                    f"Timing buffer {self.my_buffer.number} did not complete after "
+                    f"{elapsed_s:.1f}s (timeout={acquisition_timeout_s:.1f}s)."
+                )
             time.sleep(0.1)
 
         self.logger.info(
