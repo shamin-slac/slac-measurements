@@ -98,9 +98,9 @@ class TestGetMonotonicIndices(TestCase):
     def test_monotonic_indices_with_severe_wobble(self):
         """Test handling of more severe initial wobble (like real encoder noise)."""
         # Severe wobble at start: 10.002, 9.998, 10.001, 9.999, then stable: 10.0, 10.1, 10.2, 10.3, 10.4
-        position_data = np.array([
-            10.002, 9.998, 10.001, 9.999, 10.0, 10.1, 10.2, 10.3, 10.4
-        ])
+        position_data = np.array(
+            [10.002, 9.998, 10.001, 9.999, 10.0, 10.1, 10.2, 10.3, 10.4]
+        )
         indices = np.array([0, 1, 2, 3, 4, 5, 6, 7, 8])
 
         result = WireMeasurementAnalysis._get_monotonic_indices(position_data, indices)
@@ -196,10 +196,21 @@ class TestGetMonotonicIndices(TestCase):
 
     def test_monotonic_indices_selects_longest_segment(self):
         """Select the largest contiguous non-decreasing section."""
-        position_data = np.array([
-            30000, 30003, 30002, 30003, 30002, 30001,
-            30010, 30050, 30100, 30160, 30200,
-        ])
+        position_data = np.array(
+            [
+                30000,
+                30003,
+                30002,
+                30003,
+                30002,
+                30001,
+                30010,
+                30050,
+                30100,
+                30160,
+                30200,
+            ]
+        )
         indices = np.array([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
 
         result = WireMeasurementAnalysis._get_monotonic_indices(position_data, indices)
@@ -243,7 +254,9 @@ class TestWireMeasurementAnalysisOtherMethods(TestCase):
             install_angle=45.0,
         )
         collection_result = WireMeasurementCollectionResult(
-            raw_data=raw_data if raw_data is not None else {wire_name: np.array([0.0, 1.0])},
+            raw_data=raw_data
+            if raw_data is not None
+            else {wire_name: np.array([0.0, 1.0])},
             metadata=metadata,
         )
 
@@ -317,15 +330,21 @@ class TestWireMeasurementAnalysisOtherMethods(TestCase):
         self.assertIn("D1", x_profile.detectors)
         self.assertIn("TMITLOSS", x_profile.detectors)
         self.assertNotIn("MISSING", x_profile.detectors)
-        np.testing.assert_array_equal(x_profile.detectors["D1"].values, np.array([100.0, 102.0]))
-        np.testing.assert_array_equal(x_profile.detectors["TMITLOSS"].values, np.array([1.0, 3.0]))
+        np.testing.assert_array_equal(
+            x_profile.detectors["D1"].values, np.array([100.0, 102.0])
+        )
+        np.testing.assert_array_equal(
+            x_profile.detectors["TMITLOSS"].values, np.array([1.0, 3.0])
+        )
 
     def test_get_rms_sizes_returns_expected_detector_sigmas(self):
         analysis = self._make_analysis(default_detector="D1")
-        fit_result = _make_fit_result({
-            "x": {"D1": 1.25},
-            "y": {"D1": 2.5},
-        })
+        fit_result = _make_fit_result(
+            {
+                "x": {"D1": 1.25},
+                "y": {"D1": 2.5},
+            }
+        )
 
         x_rms, y_rms = analysis._get_rms_sizes(fit_result)
 
@@ -337,10 +356,12 @@ class TestWireMeasurementAnalysisOtherMethods(TestCase):
             default_detector="D1",
             detectors=["D1", "D2"],
         )
-        fit_result = _make_fit_result({
-            "x": {"D1": 1.25, "D2": 3.5},
-            "y": {"D1": 2.5, "D2": 4.5},
-        })
+        fit_result = _make_fit_result(
+            {
+                "x": {"D1": 1.25, "D2": 3.5},
+                "y": {"D1": 2.5, "D2": 4.5},
+            }
+        )
 
         x_rms, y_rms = analysis._get_rms_sizes(fit_result, detector="D2")
 
@@ -379,18 +400,29 @@ class TestWireMeasurementAnalysisOtherMethods(TestCase):
             )
         }
         expected_fit_result = {
-            "x": FitResult(detectors={"D1": _make_detector_fit(1.0, mean=0.5, amplitude=5.0)})
+            "x": FitResult(
+                detectors={"D1": _make_detector_fit(1.0, mean=0.5, amplitude=5.0)}
+            )
         }
 
-        with patch.object(analysis, "_get_profile_range_indices", return_value=expected_indices) as mock_idx, patch.object(
-            analysis,
-            "_organize_data_by_profile",
-            return_value=expected_profiles,
-        ) as mock_org, patch.object(
-            analysis,
-            "_fit_data_by_profile",
-            return_value=expected_fit_result,
-        ) as mock_fit, patch.object(analysis, "_get_rms_sizes", return_value=(1.0, 2.0)) as mock_rms:
+        with (
+            patch.object(
+                analysis, "_get_profile_range_indices", return_value=expected_indices
+            ) as mock_idx,
+            patch.object(
+                analysis,
+                "_organize_data_by_profile",
+                return_value=expected_profiles,
+            ) as mock_org,
+            patch.object(
+                analysis,
+                "_fit_data_by_profile",
+                return_value=expected_fit_result,
+            ) as mock_fit,
+            patch.object(
+                analysis, "_get_rms_sizes", return_value=(1.0, 2.0)
+            ) as mock_rms,
+        ):
             result = analysis.analyze(rms_detector="D1")
 
         mock_idx.assert_called_once_with()
@@ -399,7 +431,9 @@ class TestWireMeasurementAnalysisOtherMethods(TestCase):
         mock_rms.assert_called_once_with(expected_fit_result, detector="D1")
         self.assertEqual(set(result.fit_result.keys()), {"x"})
         self.assertEqual(result.fit_result["x"].detectors["D1"].sigma, 1.0)
-        np.testing.assert_array_equal(np.asarray(result.rms_sizes), np.array([1.0, 2.0]))
+        np.testing.assert_array_equal(
+            np.asarray(result.rms_sizes), np.array([1.0, 2.0])
+        )
         self.assertEqual(set(result.profiles.keys()), {"x"})
 
 

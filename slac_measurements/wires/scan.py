@@ -11,9 +11,7 @@ from slac_measurements.wires.collection_results import (
 from typing import Optional
 
 
-class WireBeamProfileMeasurement(
-    slac_measurements.beam_profile.BeamProfileMeasurement
-):
+class WireBeamProfileMeasurement(slac_measurements.beam_profile.BeamProfileMeasurement):
     """Full wire scan: collect and analyze beam profile data."""
 
     name: str = "Wire Beam Profile Measurement"
@@ -21,10 +19,11 @@ class WireBeamProfileMeasurement(
     beampath: str
     collection_result: Optional[WireMeasurementCollectionResult] = None
 
-    def measure(self,
-                scan_mode: ScanMode = "otf",
-                fitting_method: FittingMethod = "gaussian",
-                rms_detector: Optional[str] = None,
+    def measure(
+        self,
+        scan_mode: ScanMode = "otf",
+        fitting_method: FittingMethod = "gaussian",
+        rms_detector: Optional[str] = None,
     ) -> WireMeasurementAnalysisResult:
         """
         Run a wire scan and return the analyzed result.

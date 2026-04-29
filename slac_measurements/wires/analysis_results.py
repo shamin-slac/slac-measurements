@@ -60,9 +60,7 @@ class WireMeasurementAnalysisResult(BeamProfileMeasurementResult):
         """
 
         metadata = self.collection_result.metadata
-        selected_detector = (
-            metadata.default_detector if detector is None else detector
-        )
+        selected_detector = metadata.default_detector if detector is None else detector
 
         if selected_detector not in metadata.detectors:
             raise ValueError(
@@ -77,9 +75,7 @@ class WireMeasurementAnalysisResult(BeamProfileMeasurementResult):
         self.metadata.rms_detector = selected_detector
         self.collection_result.metadata.rms_detector = selected_detector
 
-    def _get_profile_rms(
-        self, profile: str, detector: str
-    ) -> float | None:
+    def _get_profile_rms(self, profile: str, detector: str) -> float | None:
         """Return the RMS size for a profile/detector pair, if present."""
         if profile not in self.fit_result:
             return None
@@ -98,9 +94,7 @@ class WireMeasurementAnalysisResult(BeamProfileMeasurementResult):
         profile_count = len(self.profiles)
         fit_profile_count = len(self.fit_result)
         detector_count = len(meta.detectors)
-        rms_sizes_repr = (
-            self.rms_sizes.tolist() if self.rms_sizes is not None else None
-        )
+        rms_sizes_repr = self.rms_sizes.tolist() if self.rms_sizes is not None else None
 
         return (
             f"WireMeasurementAnalysisResult("
@@ -143,6 +137,7 @@ class WireMeasurementAnalysisResult(BeamProfileMeasurementResult):
         import h5py
 
         with h5py.File(filepath, "w") as f:
+
             def _to_h5_float_array(values) -> np.ndarray:
                 """Convert optional numeric-like values to float array for HDF5."""
                 return np.array(
@@ -205,9 +200,7 @@ class WireMeasurementAnalysisResult(BeamProfileMeasurementResult):
             for profile, prof in self.profiles.items():
                 pgrp = profs_grp.create_group(profile)
                 pgrp.create_dataset("positions", data=prof.positions)
-                pgrp.create_dataset(
-                    "profile_indices", data=prof.profile_indices
-                )
+                pgrp.create_dataset("profile_indices", data=prof.profile_indices)
                 dets_grp = pgrp.create_group("detectors")
                 for det_name, det in prof.detectors.items():
                     dg = dets_grp.create_group(det_name)

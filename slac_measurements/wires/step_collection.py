@@ -14,8 +14,7 @@ class StepWireMeasurementCollection(BaseWireMeasurementCollection):
     def _run_collection_scan(self) -> None:
         """Run a step scan: init wire, start buffer, move positions, retract, wait."""
 
-        def _calculate_step_speed(position_index: int,
-                                  positions: list[int]) -> int:
+        def _calculate_step_speed(position_index: int, positions: list[int]) -> int:
             """Return speed for a step position: max for inner, computed for outer."""
 
             if position_index % 2 == 0:
@@ -53,16 +52,21 @@ class StepWireMeasurementCollection(BaseWireMeasurementCollection):
                 self.my_wire.initialize()
 
                 if slac_measurements.utils.wait_until(lambda: self.my_wire.enabled):
-                    self.logger.info("%s initialized (enabled is True).", self.my_wire.name)
+                    self.logger.info(
+                        "%s initialized (enabled is True).", self.my_wire.name
+                    )
                     return
 
-                self.logger.warning("%s did not enable - retrying...", self.my_wire.name)
+                self.logger.warning(
+                    "%s did not enable - retrying...", self.my_wire.name
+                )
 
             raise RuntimeError(
                 f"Failed to initialize {self.my_wire.name} after {max_attempts} attempts."
             )
 
-        def _move_to_step_position(*,
+        def _move_to_step_position(
+            *,
             position: int,
             position_index: int,
             total_positions: int,
@@ -107,9 +111,9 @@ class StepWireMeasurementCollection(BaseWireMeasurementCollection):
             )
 
         self.logger.info("Retracting wire...")
-        time.sleep(_WIRE_RETRACT_WAIT) # Wait for controller to stop moving
+        time.sleep(_WIRE_RETRACT_WAIT)  # Wait for controller to stop moving
         self.my_wire.retract()
-        time.sleep(_WIRE_RETRACT_WAIT) # Wait for wire to retract
+        time.sleep(_WIRE_RETRACT_WAIT)  # Wait for wire to retract
 
         wire_position = self.my_wire.motor_rbv
         self.logger.info(
@@ -118,7 +122,7 @@ class StepWireMeasurementCollection(BaseWireMeasurementCollection):
         )
 
         self.logger.info("Waiting for buffer acquisition to complete...")
-        
+
         while not self.my_buffer.is_acquisition_complete():
             elapsed_s = time.monotonic() - acquisition_start
             if elapsed_s > acquisition_timeout_s:
@@ -133,4 +137,3 @@ class StepWireMeasurementCollection(BaseWireMeasurementCollection):
             self.my_buffer.number,
             time.monotonic() - acquisition_start,
         )
-   

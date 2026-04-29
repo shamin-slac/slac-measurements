@@ -67,7 +67,7 @@ class OTFWireMeasurementCollection(BaseWireMeasurementCollection):
                 "Timing buffer %s acquisition complete after %.1f seconds",
                 self.my_buffer.number,
                 time.monotonic() - acquisition_start,
-        )
+            )
 
         self.logger.info("Performing on-the-fly scan mode")
         self._initialize_otf_with_retry()

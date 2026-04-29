@@ -168,7 +168,9 @@ def _load_metadata(group: h5py.Group) -> MeasurementMetadata:
     default_detector = group.attrs["default_detector"]
     rms_detector = group.attrs.get("rms_detector", None)
     timestamp_str = group.attrs.get("timestamp", None)
-    timestamp = datetime.fromisoformat(timestamp_str) if timestamp_str is not None else None
+    timestamp = (
+        datetime.fromisoformat(timestamp_str) if timestamp_str is not None else None
+    )
     active_profiles = group.attrs["active_profiles"]
     install_angle = group.attrs["install_angle"]
     notes = group.attrs.get("notes", None)

@@ -87,7 +87,9 @@ class BaseWireMeasurementCollection(
                     self.logger.info("Releasing timing buffer %s.", buffer_number)
                     buf.release()
                 except Exception:
-                    self.logger.exception("Failed while releasing timing buffer %s.", buffer_number)
+                    self.logger.exception(
+                        "Failed while releasing timing buffer %s.", buffer_number
+                    )
                 finally:
                     self.my_buffer = None
 
@@ -136,7 +138,11 @@ class BaseWireMeasurementCollection(
             }
 
             creator = next(
-                (f for prefix, f in create_by_prefix.items() if name.startswith(prefix)),
+                (
+                    f
+                    for prefix, f in create_by_prefix.items()
+                    if name.startswith(prefix)
+                ),
                 None,
             )
 
@@ -241,8 +247,6 @@ class BaseWireMeasurementCollection(
         self.logger.info("Data retrieved from buffer. Scan complete.")
         return data
 
-
-
     def _reserve_buffer(self) -> object:
         """Reserve a timing buffer for the scan based on beampath and wire metadata."""
 
@@ -300,7 +304,9 @@ class BaseWireMeasurementCollection(
         self.detectors = [d.split(":")[0] for d in self.my_wire.metadata.detectors]
         return self
 
-def create_wire_collection(*,
+
+def create_wire_collection(
+    *,
     scan_mode: ScanMode,
     beam_profile_device: Wire,
     beampath: str,
@@ -308,7 +314,9 @@ def create_wire_collection(*,
     """Instantiate the mode-specific wire collection class."""
 
     if scan_mode == "step":
-        from slac_measurements.wires.step_collection import StepWireMeasurementCollection
+        from slac_measurements.wires.step_collection import (
+            StepWireMeasurementCollection,
+        )
 
         return StepWireMeasurementCollection(
             beam_profile_device=beam_profile_device,

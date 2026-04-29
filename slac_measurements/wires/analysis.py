@@ -33,9 +33,7 @@ class WireMeasurementAnalysis(slac_measurements.beam_profile.BeamProfileAnalysis
     model_config = ConfigDict(arbitrary_types_allowed=True)
     fitting_method: FittingMethod = "gaussian"
 
-    def analyze(self,
-                rms_detector: str | None = None
-    ) -> WireMeasurementAnalysisResult:
+    def analyze(self, rms_detector: str | None = None) -> WireMeasurementAnalysisResult:
         """
         Fit profiles and extract RMS beam sizes.
 
@@ -54,11 +52,15 @@ class WireMeasurementAnalysis(slac_measurements.beam_profile.BeamProfileAnalysis
         profile_indices = self._get_profile_range_indices()
         profile_measurements = self._organize_data_by_profile(profile_indices)
 
-        fit_result = self._fit_data_by_profile(profile_measurements=profile_measurements)
+        fit_result = self._fit_data_by_profile(
+            profile_measurements=profile_measurements
+        )
         rms_sizes = self._get_rms_sizes(fit_result, detector=rms_detector)
 
         metadata = self.collection_result.metadata
-        metadata.rms_detector = rms_detector if rms_detector is not None else metadata.default_detector
+        metadata.rms_detector = (
+            rms_detector if rms_detector is not None else metadata.default_detector
+        )
 
         return WireMeasurementAnalysisResult(
             fit_result=fit_result,
@@ -68,8 +70,8 @@ class WireMeasurementAnalysis(slac_measurements.beam_profile.BeamProfileAnalysis
             profiles=profile_measurements,
         )
 
-    def _create_detector_measurement(self,
-                                     device_name: str, data_slice: np.ndarray
+    def _create_detector_measurement(
+        self, device_name: str, data_slice: np.ndarray
     ) -> DetectorProfileMeasurement:
         """Create a DetectorProfileMeasurement object for a given device and data slice."""
 
@@ -80,7 +82,9 @@ class WireMeasurementAnalysis(slac_measurements.beam_profile.BeamProfileAnalysis
             return "counts"
 
         return DetectorProfileMeasurement(
-            values=data_slice, units=_get_units_for_device(device_name), label=device_name
+            values=data_slice,
+            units=_get_units_for_device(device_name),
+            label=device_name,
         )
 
     def _fit_data_by_profile(self, profile_measurements) -> dict[str, FitResult]:
@@ -96,12 +100,14 @@ class WireMeasurementAnalysis(slac_measurements.beam_profile.BeamProfileAnalysis
 
         return fit_result
 
-    def _fit_profile(self,
-                     profile_measurements, profile: str, detectors: list
+    def _fit_profile(
+        self, profile_measurements, profile: str, detectors: list
     ) -> FitResult:
         """Fit all detectors for one profile and return fit results."""
 
-        def _convert_stage_to_beam_coords(profile: str, positions: np.ndarray) -> np.ndarray:
+        def _convert_stage_to_beam_coords(
+            profile: str, positions: np.ndarray
+        ) -> np.ndarray:
             """Convert stage positions to beam coordinates for a given profile."""
             scale = _extract_wire_angle()
             return positions * abs(scale[profile])
@@ -111,8 +117,9 @@ class WireMeasurementAnalysis(slac_measurements.beam_profile.BeamProfileAnalysis
             rad = np.deg2rad(self.collection_result.metadata.install_angle)
             return {"x": np.sin(rad), "y": np.cos(rad), "u": 1.0}
 
-        def _fit_detector_in_profile(x_beam: np.ndarray,
-                                     detector_signal: np.ndarray, profile: str) -> DetectorFit:
+        def _fit_detector_in_profile(
+            x_beam: np.ndarray, detector_signal: np.ndarray, profile: str
+        ) -> DetectorFit:
             """Fit one detector signal for a profile and return DetectorFit."""
             # Dynamically import the fitting module based on fitting_method
             fitting_module = importlib.import_module(
@@ -123,7 +130,9 @@ class WireMeasurementAnalysis(slac_measurements.beam_profile.BeamProfileAnalysis
 
             # Get fit parameters - use_prior parameter only exists for asymmetric_gaussian
             if self.fitting_method == "asymmetric_gaussian":
-                fp = fitting_module.fit(pos=peak_window[0], data=peak_window[1], use_prior=False)
+                fp = fitting_module.fit(
+                    pos=peak_window[0], data=peak_window[1], use_prior=False
+                )
             else:
                 fp = fitting_module.fit(pos=peak_window[0], data=peak_window[1])
 
@@ -143,10 +152,10 @@ class WireMeasurementAnalysis(slac_measurements.beam_profile.BeamProfileAnalysis
                 offset=fp["off"],
                 curve=fit_curve,
                 positions=peak_window[0],
-                )
+            )
 
-        def _peak_window(x: np.ndarray,
-                         y: np.ndarray, n_stds: float = 8, filter_size: int = 5
+        def _peak_window(
+            x: np.ndarray, y: np.ndarray, n_stds: float = 8, filter_size: int = 5
         ) -> tuple:
             """
             Extract a peak-centered window from 1D detector data.
@@ -245,7 +254,11 @@ class WireMeasurementAnalysis(slac_measurements.beam_profile.BeamProfileAnalysis
 
         # If the selected run starts immediately after a rollback, drop the
         # first point (local trough) so the kept segment starts with forward motion.
-        if best_start > 0 and pos[best_start] < pos[best_start - 1] and (best_end - best_start) > 1:
+        if (
+            best_start > 0
+            and pos[best_start] < pos[best_start - 1]
+            and (best_end - best_start) > 1
+        ):
             best_start += 1
 
         return indices[best_start:best_end]
@@ -253,8 +266,9 @@ class WireMeasurementAnalysis(slac_measurements.beam_profile.BeamProfileAnalysis
     def _get_profile_range_indices(self) -> dict[str, np.ndarray]:
         """Finds sequential scan indices within each profile's position range."""
 
-        def _get_indices_in_range(position_data: np.ndarray,
-                                  min_pos: float, max_pos: float) -> np.ndarray:
+        def _get_indices_in_range(
+            position_data: np.ndarray, min_pos: float, max_pos: float
+        ) -> np.ndarray:
             """Return indices of position data within a given range."""
 
             return np.where((position_data >= min_pos) & (position_data <= max_pos))[0]
@@ -264,8 +278,7 @@ class WireMeasurementAnalysis(slac_measurements.beam_profile.BeamProfileAnalysis
 
             if position_data.min() == position_data.max():
                 msg = (
-                    "Min and max position are the same. Check scan data "
-                    "and collection."
+                    "Min and max position are the same. Check scan data and collection."
                 )
                 raise RuntimeError(msg)
 
@@ -274,8 +287,9 @@ class WireMeasurementAnalysis(slac_measurements.beam_profile.BeamProfileAnalysis
 
             return self.collection_result.metadata.scan_ranges[profile]
 
-        def _check_range_in_position(position_data: np.ndarray,
-                                     profile: str, profile_range: tuple) -> None:
+        def _check_range_in_position(
+            position_data: np.ndarray, profile: str, profile_range: tuple
+        ) -> None:
             """Check if the position data covers the expected range for a profile."""
 
             if position_data.max() < profile_range[0]:
@@ -307,8 +321,8 @@ class WireMeasurementAnalysis(slac_measurements.beam_profile.BeamProfileAnalysis
 
         return profile_indices
 
-    def _get_rms_sizes(self,
-                       fit_result: dict, detector: str | None = None
+    def _get_rms_sizes(
+        self, fit_result: dict, detector: str | None = None
     ) -> tuple[float | None, float | None]:
         """
         Extract x/y RMS sizes from fit results.
@@ -348,7 +362,9 @@ class WireMeasurementAnalysis(slac_measurements.beam_profile.BeamProfileAnalysis
 
         return (x_rms, y_rms)
 
-    def _organize_data_by_profile(self, profile_indices: dict[str, np.ndarray]) -> dict[str, ProfileMeasurement]:
+    def _organize_data_by_profile(
+        self, profile_indices: dict[str, np.ndarray]
+    ) -> dict[str, ProfileMeasurement]:
         """
         Organizes detector data by scan profile for each device.
 
@@ -357,11 +373,13 @@ class WireMeasurementAnalysis(slac_measurements.beam_profile.BeamProfileAnalysis
                   data per profile.
         """
 
-        def _create_profile_measurement(positions: np.ndarray,
-                                        detectors: dict, profile_indices: np.ndarray
+        def _create_profile_measurement(
+            positions: np.ndarray, detectors: dict, profile_indices: np.ndarray
         ) -> ProfileMeasurement:
             return ProfileMeasurement(
-                positions=positions, detectors=detectors, profile_indices=profile_indices
+                positions=positions,
+                detectors=detectors,
+                profile_indices=profile_indices,
             )
 
         profile_measurements = {}

@@ -18,9 +18,7 @@ def _get_username() -> str:
     if user:
         return user
 
-    raise BufferError(
-        "Could not determine current username for buffer reservation."
-    )
+    raise BufferError("Could not determine current username for buffer reservation.")
 
 
 def reserve_buffer(
@@ -128,7 +126,6 @@ def _reserve_edef_buffer(
     n_measurements: int,
     logger: logging.Logger | None = None,
 ):
-    
     def _choose_beamcode(beampath):
         if beampath.startswith("CU_HXR"):
             return 1
