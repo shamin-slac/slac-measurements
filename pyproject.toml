@@ -45,3 +45,6 @@ include_package_data = true
 
 [tool.setuptools.packages.find]
 include = ["slac_measurements*"]
+
+[tool.ruff.lint.per-file-ignores]
+"**/__init__.py" = ["F401"]

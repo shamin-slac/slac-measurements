@@ -15,14 +15,13 @@ from slac_measurements.wires.analysis_results import (
     WireMeasurementAnalysisResult,
 )
 
+FittingMethod = Literal["gaussian", "asymmetric_gaussian", "super_gaussian"]
+
 
 class WireMeasurementAnalysis(slac_measurements.beam_profile.BeamProfileAnalysis):
     """
-    Analyzes wire scan data: organizes by profile, fits beam profile curves,
-    extracts beam parameters.
-
-    Takes raw wire measurement data and performs curve fitting to extract
-    centroid, RMS size, and amplitude for each detector and profile.
+    Organizes wire-scan data by profile, fits curves, and extracts
+    centroid, RMS size, and amplitude per detector.
 
     Attributes:
         collection_result: Raw measurement data from wire scan.
@@ -32,38 +31,36 @@ class WireMeasurementAnalysis(slac_measurements.beam_profile.BeamProfileAnalysis
     """
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
-    fitting_method: Literal["gaussian", "asymmetric_gaussian", "super_gaussian"] = "gaussian"
+    fitting_method: FittingMethod = "gaussian"
 
-    def analyze(
-        self, rms_detector: str | None = None
-    ) -> WireMeasurementAnalysisResult:
+    def analyze(self, rms_detector: str | None = None) -> WireMeasurementAnalysisResult:
         """
-        Organize data by profile, fit beam profile curves, extract RMS sizes.
-
-        Uses the configured fitting method (set via fitting_method parameter)
-        to fit each detector's data. Available methods: 'gaussian',
-        'asymmetric_gaussian', 'super_gaussian'.
+        Fit profiles and extract RMS beam sizes.
 
         Parameters
         ----------
         rms_detector : str, optional
-            Detector name used to extract RMS sizes. If omitted, uses
+            Detector used for RMS extraction; defaults to
             ``collection_result.metadata.default_detector``.
 
         Returns
         -------
         WireMeasurementAnalysisResult
-            Fit results per profile and detector, RMS beam sizes, and
-            organized data.
+            Fit results, RMS sizes, and organized profile data.
         """
+
         profile_indices = self._get_profile_range_indices()
         profile_measurements = self._organize_data_by_profile(profile_indices)
 
-        fit_result = self._fit_data_by_profile(profile_measurements=profile_measurements)
+        fit_result = self._fit_data_by_profile(
+            profile_measurements=profile_measurements
+        )
         rms_sizes = self._get_rms_sizes(fit_result, detector=rms_detector)
 
         metadata = self.collection_result.metadata
-        metadata.rms_detector = rms_detector if rms_detector is not None else metadata.default_detector
+        metadata.rms_detector = (
+            rms_detector if rms_detector is not None else metadata.default_detector
+        )
 
         return WireMeasurementAnalysisResult(
             fit_result=fit_result,
@@ -76,30 +73,23 @@ class WireMeasurementAnalysis(slac_measurements.beam_profile.BeamProfileAnalysis
     def _create_detector_measurement(
         self, device_name: str, data_slice: np.ndarray
     ) -> DetectorProfileMeasurement:
-        """
-        Create a DetectorProfileMeasurement object for a given device and
-        data slice.
-        """
+        """Create a DetectorProfileMeasurement object for a given device and data slice."""
+
         def _get_units_for_device(device_name: str) -> str:
             """Get the appropriate units for a given device based on its name."""
             if device_name == "TMITLOSS":
-                return "%% beam loss"
+                return "% beam loss"
             return "counts"
 
         return DetectorProfileMeasurement(
-            values=data_slice, units=_get_units_for_device(device_name), label=device_name
+            values=data_slice,
+            units=_get_units_for_device(device_name),
+            label=device_name,
         )
 
-    def _fit_data_by_profile(self, profile_measurements) -> dict:
-        """
-        Fit detector data for each profile and device using the configured fitting method.
+    def _fit_data_by_profile(self, profile_measurements) -> dict[str, FitResult]:
+        """Fit detector data for each profile using the configured method."""
 
-        Applies curve fitting to x, y, and u projections for all detectors
-        in the measurement result.
-
-        Returns:
-            dict: Fit results organized by profile and detector.
-        """
         profiles = list(profile_measurements.keys())
         detectors = list(self.collection_result.metadata.detectors)
 
@@ -113,40 +103,24 @@ class WireMeasurementAnalysis(slac_measurements.beam_profile.BeamProfileAnalysis
     def _fit_profile(
         self, profile_measurements, profile: str, detectors: list
     ) -> FitResult:
-        """
-        Fit all detectors within a single profile.
+        """Fit all detectors for one profile and return fit results."""
 
-        Parameters:
-            profile (str): Profile name ('x', 'y', or 'u').
-            detectors (list): List of detector names.
-
-        Returns:
-            FitResult: Fit results for all detectors in the profile.
-        """
-        def _convert_stage_to_beam_coords(profile: str, positions: np.ndarray) -> np.ndarray:
+        def _convert_stage_to_beam_coords(
+            profile: str, positions: np.ndarray
+        ) -> np.ndarray:
             """Convert stage positions to beam coordinates for a given profile."""
             scale = _extract_wire_angle()
             return positions * abs(scale[profile])
 
         def _extract_wire_angle() -> dict:
-            """
-            Extract the wire install angle (in radians) for coordinate conversion.
-            """
+            """Extract the wire install angle (in radians) for coordinate conversion."""
             rad = np.deg2rad(self.collection_result.metadata.install_angle)
             return {"x": np.sin(rad), "y": np.cos(rad), "u": 1.0}
 
-        def _fit_detector_in_profile(x_beam: np.ndarray, detector_signal: np.ndarray, profile: str) -> DetectorFit:
-            """
-            Fit a single detector signal within a profile using the configured fitting method.
-
-            Parameters:
-                x_beam (np.ndarray): Position data in beam coordinates.
-                detector_signal (np.ndarray): Detector signal values.
-                profile (str): Profile name ('x', 'y', or 'u').
-
-            Returns:
-                DetectorFit: Fit parameters (mean in stage coords, others in beam coords) and curve.
-            """
+        def _fit_detector_in_profile(
+            x_beam: np.ndarray, detector_signal: np.ndarray, profile: str
+        ) -> DetectorFit:
+            """Fit one detector signal for a profile and return DetectorFit."""
             # Dynamically import the fitting module based on fitting_method
             fitting_module = importlib.import_module(
                 f"slac_measurements.fitting.{self.fitting_method}"
@@ -156,7 +130,9 @@ class WireMeasurementAnalysis(slac_measurements.beam_profile.BeamProfileAnalysis
 
             # Get fit parameters - use_prior parameter only exists for asymmetric_gaussian
             if self.fitting_method == "asymmetric_gaussian":
-                fp = fitting_module.fit(pos=peak_window[0], data=peak_window[1], use_prior=False)
+                fp = fitting_module.fit(
+                    pos=peak_window[0], data=peak_window[1], use_prior=False
+                )
             else:
                 fp = fitting_module.fit(pos=peak_window[0], data=peak_window[1])
 
@@ -176,27 +152,24 @@ class WireMeasurementAnalysis(slac_measurements.beam_profile.BeamProfileAnalysis
                 offset=fp["off"],
                 curve=fit_curve,
                 positions=peak_window[0],
-                )
+            )
 
         def _peak_window(
             x: np.ndarray, y: np.ndarray, n_stds: float = 8, filter_size: int = 5
         ) -> tuple:
             """
-            Extract peak window from 1D detector data using statistical windowing.
-
-            Applies median filtering, triangle thresholding, and n-sigma windowing
-            around the signal centroid.
+            Extract a peak-centered window from 1D detector data.
 
             Parameters:
                 x (np.ndarray): Position data.
                 y (np.ndarray): Detector signal values.
-                n_stds (float): Number of standard deviations for windowing.
-                                Default is 8.
-                filter_size (int): Median filter kernel size. Default is 5.
+                n_stds (float): Window half-width in RMS units (default 8).
+                filter_size (int): Median filter size (default 5).
 
             Returns:
-                tuple: (windowed_x, windowed_y, (left_idx, right_idx))
+                tuple: (windowed_x, windowed_y)
             """
+
             x = np.asarray(x)
             y = np.asarray(y)
 
@@ -234,7 +207,7 @@ class WireMeasurementAnalysis(slac_measurements.beam_profile.BeamProfileAnalysis
             left = max(0, left)
             right = min(len(y) - 1, right)
 
-            return x[left : right + 1], y[left : right + 1], (left, right)
+            return x[left : right + 1], y[left : right + 1]
 
         profile_data = profile_measurements[profile]
         x_stage = profile_data.positions
@@ -251,17 +224,12 @@ class WireMeasurementAnalysis(slac_measurements.beam_profile.BeamProfileAnalysis
 
         return FitResult(detectors=detector_fits)
 
+    @staticmethod
     def _get_monotonic_indices(
-        self, position_data: np.ndarray, indices: np.ndarray
+        position_data: np.ndarray, indices: np.ndarray
     ) -> np.ndarray:
-        """
-        Return indices for the longest continuous monotonically
-        non-decreasing segment.
+        """Return the longest contiguous non-decreasing segment of indices."""
 
-        The input indices are assumed to already be filtered to the requested
-        profile range. This method removes points that break monotonic
-        non-decreasing behavior by selecting the single longest contiguous run.
-        """
         if len(indices) <= 1:
             return indices
 
@@ -286,47 +254,48 @@ class WireMeasurementAnalysis(slac_measurements.beam_profile.BeamProfileAnalysis
 
         # If the selected run starts immediately after a rollback, drop the
         # first point (local trough) so the kept segment starts with forward motion.
-        if best_start > 0 and pos[best_start] < pos[best_start - 1] and (best_end - best_start) > 1:
+        if (
+            best_start > 0
+            and pos[best_start] < pos[best_start - 1]
+            and (best_end - best_start) > 1
+        ):
             best_start += 1
 
         return indices[best_start:best_end]
 
-    def _get_profile_range_indices(self) -> dict:
-        """
-        Finds sequential scan indices within each profile's position range.
+    def _get_profile_range_indices(self) -> dict[str, np.ndarray]:
+        """Finds sequential scan indices within each profile's position range."""
 
-        Returns:
-            dict: Profile keys ('x', 'y', 'u') with lists of index arrays.
-        """
-        def _get_indices_in_range(position_data: np.ndarray, min_pos: float, max_pos: float) -> np.ndarray:
+        def _get_indices_in_range(
+            position_data: np.ndarray, min_pos: float, max_pos: float
+        ) -> np.ndarray:
             """Return indices of position data within a given range."""
+
             return np.where((position_data >= min_pos) & (position_data <= max_pos))[0]
 
         def _validate_position_data(position_data: np.ndarray) -> None:
-            """
-            Validates the position data to ensure it is suitable for analysis.
-            """
+            """Validates the position data to ensure it is suitable for analysis."""
+
             if position_data.min() == position_data.max():
                 msg = (
-                    "Min and max position are the same. Check scan data "
-                    "and collection. Exiting scan."
+                    "Min and max position are the same. Check scan data and collection."
                 )
                 raise RuntimeError(msg)
 
         def _get_profile_range(profile: str) -> tuple:
             """Get the (min, max) range for a given profile."""
-            # Ranges are stored in the collection metadata by profile name
+
             return self.collection_result.metadata.scan_ranges[profile]
 
-        def _check_range_in_position(position_data: np.ndarray, profile: str, profile_range: tuple) -> None:
-            """
-            Check if the position data covers the expected range for a profile.
-            """
+        def _check_range_in_position(
+            position_data: np.ndarray, profile: str, profile_range: tuple
+        ) -> None:
+            """Check if the position data covers the expected range for a profile."""
+
             if position_data.max() < profile_range[0]:
                 msg = (
                     f"Scan did not reach expected {profile} profile range "
-                    f"{profile_range}. Check scan data and collection. "
-                    f"Exiting scan."
+                    f"{profile_range}. Check scan data and collection."
                 )
                 raise RuntimeError(msg)
 
@@ -356,19 +325,17 @@ class WireMeasurementAnalysis(slac_measurements.beam_profile.BeamProfileAnalysis
         self, fit_result: dict, detector: str | None = None
     ) -> tuple[float | None, float | None]:
         """
-        Extract RMS beam sizes from fit results.
-
-        Computes RMS sizes from x and y profile fits using the
-        requested detector, defaulting to the configured default detector.
+        Extract x/y RMS sizes from fit results.
 
         Parameters:
             fit_result (dict): Fit results from fit_data_by_profile().
-            detector (str | None): Detector name to use for RMS extraction.
+            detector (str | None): Detector to use; defaults to metadata default.
 
         Returns:
-            tuple[float | None, float | None]: (x_rms, y_rms) in meters.
-            Returns (None, None) if neither profile is present.
+            tuple[float | None, float | None]: (x_rms, y_rms) in meters,
+            or (None, None) if x/y are unavailable.
         """
+
         available_detectors = self.collection_result.metadata.detectors
         selected_detector = (
             self.collection_result.metadata.default_detector
@@ -395,7 +362,9 @@ class WireMeasurementAnalysis(slac_measurements.beam_profile.BeamProfileAnalysis
 
         return (x_rms, y_rms)
 
-    def _organize_data_by_profile(self, profile_indices) -> dict:
+    def _organize_data_by_profile(
+        self, profile_indices: dict[str, np.ndarray]
+    ) -> dict[str, ProfileMeasurement]:
         """
         Organizes detector data by scan profile for each device.
 
@@ -403,11 +372,14 @@ class WireMeasurementAnalysis(slac_measurements.beam_profile.BeamProfileAnalysis
             dict: Nested dict with profiles as keys and device
                   data per profile.
         """
+
         def _create_profile_measurement(
             positions: np.ndarray, detectors: dict, profile_indices: np.ndarray
         ) -> ProfileMeasurement:
             return ProfileMeasurement(
-                positions=positions, detectors=detectors, profile_indices=profile_indices
+                positions=positions,
+                detectors=detectors,
+                profile_indices=profile_indices,
             )
 
         profile_measurements = {}

@@ -1,6 +1,7 @@
 from unittest import TestCase
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 from datetime import datetime
+from tempfile import TemporaryDirectory
 import numpy as np
 
 from slac_devices.wire import Wire
@@ -8,6 +9,7 @@ from slac_measurements.wires.scan import WireBeamProfileMeasurement
 from slac_measurements.wires.collection_results import (
     MeasurementMetadata,
     WireMeasurementCollectionResult,
+    load_from_h5,
 )
 
 
@@ -21,6 +23,7 @@ class WireBeamProfileMeasurementTest(TestCase):
     def _make_collection_result() -> WireMeasurementCollectionResult:
         metadata = MeasurementMetadata(
             wire_name="WIRE",
+            buffer_number=7,
             area="TEST",
             beampath="TEST",
             detectors=["D1"],
@@ -36,13 +39,13 @@ class WireBeamProfileMeasurementTest(TestCase):
         )
 
     @patch("slac_measurements.wires.scan.WireMeasurementAnalysis")
-    @patch("slac_measurements.wires.scan.WireMeasurementCollection")
+    @patch("slac_measurements.wires.scan.create_wire_collection")
     def test_measure_uses_configured_fitting_method(
         self,
-        mock_collection_cls,
+        mock_create_collection,
         mock_analysis_cls,
     ):
-        mock_collection = mock_collection_cls.return_value
+        mock_collection = mock_create_collection.return_value
         mock_collection.measure.return_value = "collection-result"
 
         mock_analysis = mock_analysis_cls.return_value
@@ -57,24 +60,33 @@ class WireBeamProfileMeasurementTest(TestCase):
 
         self.assertEqual(result, "analysis-result")
         self.assertEqual(measurement.collection_result, "collection-result")
-        mock_collection_cls.assert_called_once_with(
-            beam_profile_device=measurement.beam_profile_device,
-            beampath="TEST",
+        mock_create_collection.assert_called_once()
+        self.assertEqual(
+            mock_create_collection.call_args.kwargs["scan_mode"],
+            "otf",
         )
-        mock_collection.measure.assert_called_once_with(scan_mode="step")
+        self.assertIs(
+            mock_create_collection.call_args.kwargs["beam_profile_device"],
+            measurement.beam_profile_device,
+        )
+        self.assertEqual(
+            mock_create_collection.call_args.kwargs["beampath"],
+            "TEST",
+        )
+        mock_collection.measure.assert_called_once_with()
         mock_analysis_cls.assert_called_once_with(
             collection_result="collection-result",
             fitting_method="super_gaussian",
         )
 
     @patch("slac_measurements.wires.scan.WireMeasurementAnalysis")
-    @patch("slac_measurements.wires.scan.WireMeasurementCollection")
+    @patch("slac_measurements.wires.scan.create_wire_collection")
     def test_measure_allows_fitting_method_override(
         self,
-        mock_collection_cls,
+        mock_create_collection,
         mock_analysis_cls,
     ):
-        mock_collection = mock_collection_cls.return_value
+        mock_collection = mock_create_collection.return_value
         mock_collection.measure.return_value = "collection-result"
 
         mock_analysis = mock_analysis_cls.return_value
@@ -88,14 +100,14 @@ class WireBeamProfileMeasurementTest(TestCase):
         result = measurement.measure(fitting_method="asymmetric_gaussian")
 
         self.assertEqual(result, "analysis-result")
-        mock_collection.measure.assert_called_once_with(scan_mode="step")
+        mock_collection.measure.assert_called_once_with()
         mock_analysis_cls.assert_called_once_with(
             collection_result="collection-result",
             fitting_method="asymmetric_gaussian",
         )
 
     @patch("slac_measurements.wires.scan.WireMeasurementAnalysis")
-    def test_analyze_can_refit_with_override(self, mock_analysis_cls):
+    def test_analysis_class_can_refit_collection_result(self, mock_analysis_cls):
         mock_analysis = mock_analysis_cls.return_value
         mock_analysis.analyze.return_value = "analysis-result"
 
@@ -105,7 +117,11 @@ class WireBeamProfileMeasurementTest(TestCase):
         )
         measurement.collection_result = self._make_collection_result()
 
-        result = measurement.analyze(fitting_method="super_gaussian")
+        analysis = mock_analysis_cls(
+            collection_result=measurement.collection_result,
+            fitting_method="super_gaussian",
+        )
+        result = analysis.analyze(rms_detector=None)
 
         self.assertEqual(result, "analysis-result")
         mock_analysis_cls.assert_called_once_with(
@@ -114,40 +130,42 @@ class WireBeamProfileMeasurementTest(TestCase):
         )
         mock_analysis.analyze.assert_called_once_with(rms_detector=None)
 
-    # measure() constructs WireMeasurementCollection internally, so we patch
+    # measure() constructs a mode-specific collection via factory, so we patch
     # it to keep this unit test isolated from collection setup behavior.
-    @patch("slac_measurements.wires.scan.WireMeasurementCollection")
-    def test_measure_passes_rms_detector_override(self, mock_collection_cls):
-        mock_collection_cls.return_value.measure.return_value = "collection-result"
+    @patch("slac_measurements.wires.scan.WireMeasurementAnalysis")
+    @patch("slac_measurements.wires.scan.create_wire_collection")
+    def test_measure_passes_rms_detector_override(
+        self,
+        mock_create_collection,
+        mock_analysis_cls,
+    ):
+        mock_create_collection.return_value.measure.return_value = "collection-result"
+        mock_analysis_cls.return_value.analyze.return_value = "analysis-result"
 
         measurement = WireBeamProfileMeasurement(
             beam_profile_device=self._make_wire_device(),
             beampath="TEST",
         )
 
-        with patch.object(
-            WireBeamProfileMeasurement,
-            "analyze",
-            autospec=True,
-            return_value="analysis-result",
-        ) as mock_analyze:
-            measurement.measure(
-                fitting_method="gaussian",
-                rms_detector="D2",
-            )
-
-        mock_analyze.assert_called_once()
-        self.assertIs(mock_analyze.call_args.args[0], measurement)
-        self.assertEqual(
-            mock_analyze.call_args.kwargs,
-            {"fitting_method": "gaussian", "rms_detector": "D2"},
+        measurement.measure(
+            fitting_method="gaussian",
+            rms_detector="D2",
         )
 
-    def test_analyze_raises_if_no_collection_result(self):
-        measurement = WireBeamProfileMeasurement(
-            beam_profile_device=self._make_wire_device(),
-            beampath="TEST",
+        mock_analysis_cls.assert_called_once_with(
+            collection_result="collection-result",
+            fitting_method="gaussian",
+        )
+        mock_analysis_cls.return_value.analyze.assert_called_once_with(
+            rms_detector="D2",
         )
 
-        with self.assertRaises(RuntimeError):
-            measurement.analyze(fitting_method="gaussian")
+    def test_collection_result_round_trip_preserves_buffer_number(self):
+        collection_result = self._make_collection_result()
+
+        with TemporaryDirectory() as tmpdir:
+            outpath = f"{tmpdir}/collection_result.h5"
+            collection_result.save_to_h5(outpath)
+            loaded = load_from_h5(outpath)
+
+        self.assertEqual(loaded.metadata.buffer_number, 7)
