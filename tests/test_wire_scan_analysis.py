@@ -67,7 +67,7 @@ class TestGetMonotonicIndices(TestCase):
         position_data = np.array([1.0, 2.0, 3.0, 4.0, 5.0])
         indices = np.array([0, 1, 2, 3, 4])
 
-        result = WireMeasurementAnalysis._get_monotonic_indices(None, position_data, indices)
+        result = WireMeasurementAnalysis._get_monotonic_indices(position_data, indices)
 
         np.testing.assert_array_equal(result, indices)
 
@@ -77,7 +77,7 @@ class TestGetMonotonicIndices(TestCase):
         position_data = np.array([5.2, 4.8, 5.1, 4.9, 5.0, 5.5, 6.0, 6.5, 7.0])
         indices = np.array([0, 1, 2, 3, 4, 5, 6, 7, 8])
 
-        result = WireMeasurementAnalysis._get_monotonic_indices(None, position_data, indices)
+        result = WireMeasurementAnalysis._get_monotonic_indices(position_data, indices)
 
         # Leading trough at run boundary is dropped.
         expected = np.array([4, 5, 6, 7, 8])
@@ -89,7 +89,7 @@ class TestGetMonotonicIndices(TestCase):
         position_data = np.array([5.0, 5.0, 5.0, 5.1, 5.2, 5.3])
         indices = np.array([0, 1, 2, 3, 4, 5])
 
-        result = WireMeasurementAnalysis._get_monotonic_indices(None, position_data, indices)
+        result = WireMeasurementAnalysis._get_monotonic_indices(position_data, indices)
 
         # All indices should be included (flat is monotonically non-decreasing)
         expected = np.array([0, 1, 2, 3, 4, 5])
@@ -98,12 +98,12 @@ class TestGetMonotonicIndices(TestCase):
     def test_monotonic_indices_with_severe_wobble(self):
         """Test handling of more severe initial wobble (like real encoder noise)."""
         # Severe wobble at start: 10.002, 9.998, 10.001, 9.999, then stable: 10.0, 10.1, 10.2, 10.3, 10.4
-        position_data = np.array([
-            10.002, 9.998, 10.001, 9.999, 10.0, 10.1, 10.2, 10.3, 10.4
-        ])
+        position_data = np.array(
+            [10.002, 9.998, 10.001, 9.999, 10.0, 10.1, 10.2, 10.3, 10.4]
+        )
         indices = np.array([0, 1, 2, 3, 4, 5, 6, 7, 8])
 
-        result = WireMeasurementAnalysis._get_monotonic_indices(None, position_data, indices)
+        result = WireMeasurementAnalysis._get_monotonic_indices(position_data, indices)
 
         # Leading trough at run boundary is dropped.
         expected = np.array([4, 5, 6, 7, 8])
@@ -114,7 +114,7 @@ class TestGetMonotonicIndices(TestCase):
         position_data = np.array([5.0])
         indices = np.array([0])
 
-        result = WireMeasurementAnalysis._get_monotonic_indices(None, position_data, indices)
+        result = WireMeasurementAnalysis._get_monotonic_indices(position_data, indices)
 
         np.testing.assert_array_equal(result, indices)
 
@@ -123,7 +123,7 @@ class TestGetMonotonicIndices(TestCase):
         position_data = np.array([])
         indices = np.array([], dtype=int)
 
-        result = WireMeasurementAnalysis._get_monotonic_indices(None, position_data, indices)
+        result = WireMeasurementAnalysis._get_monotonic_indices(position_data, indices)
 
         np.testing.assert_array_equal(result, indices)
 
@@ -132,7 +132,7 @@ class TestGetMonotonicIndices(TestCase):
         position_data = np.array([5.0, 6.0])
         indices = np.array([0, 1])
 
-        result = WireMeasurementAnalysis._get_monotonic_indices(None, position_data, indices)
+        result = WireMeasurementAnalysis._get_monotonic_indices(position_data, indices)
 
         np.testing.assert_array_equal(result, indices)
 
@@ -141,7 +141,7 @@ class TestGetMonotonicIndices(TestCase):
         position_data = np.array([6.0, 5.0])
         indices = np.array([0, 1])
 
-        result = WireMeasurementAnalysis._get_monotonic_indices(None, position_data, indices)
+        result = WireMeasurementAnalysis._get_monotonic_indices(position_data, indices)
 
         # Two runs of length 1 tie; implementation keeps the later run.
         expected = np.array([1])
@@ -155,7 +155,7 @@ class TestGetMonotonicIndices(TestCase):
         indices = np.array([5, 6, 7, 8, 9, 10, 11])
         # Corresponding positions: [5.2, 4.8, 5.1, 4.9, 5.0, 5.5, 6.0]
 
-        result = WireMeasurementAnalysis._get_monotonic_indices(None, position_data, indices)
+        result = WireMeasurementAnalysis._get_monotonic_indices(position_data, indices)
 
         # Leading trough at run boundary is dropped.
         expected = np.array([9, 10, 11])
@@ -166,7 +166,7 @@ class TestGetMonotonicIndices(TestCase):
         position_data = np.array([10.0, 9.0, 8.0, 7.0, 6.0])
         indices = np.array([0, 1, 2, 3, 4])
 
-        result = WireMeasurementAnalysis._get_monotonic_indices(None, position_data, indices)
+        result = WireMeasurementAnalysis._get_monotonic_indices(position_data, indices)
 
         # All runs have length 1; implementation keeps the later run on ties.
         expected = np.array([4])
@@ -177,7 +177,7 @@ class TestGetMonotonicIndices(TestCase):
         position_data = np.array([5.0, 5.0, 5.0, 5.0, 5.0])
         indices = np.array([0, 1, 2, 3, 4])
 
-        result = WireMeasurementAnalysis._get_monotonic_indices(None, position_data, indices)
+        result = WireMeasurementAnalysis._get_monotonic_indices(position_data, indices)
 
         # All should be returned (equal values are monotonic non-decreasing)
         np.testing.assert_array_equal(result, indices)
@@ -188,7 +188,7 @@ class TestGetMonotonicIndices(TestCase):
         position_data = np.array([5.2, 4.8, 5.0, 5.0, 5.0, 5.1, 5.2])
         indices = np.array([0, 1, 2, 3, 4, 5, 6])
 
-        result = WireMeasurementAnalysis._get_monotonic_indices(None, position_data, indices)
+        result = WireMeasurementAnalysis._get_monotonic_indices(position_data, indices)
 
         # Leading trough at run boundary is dropped.
         expected = np.array([2, 3, 4, 5, 6])
@@ -196,13 +196,24 @@ class TestGetMonotonicIndices(TestCase):
 
     def test_monotonic_indices_selects_longest_segment(self):
         """Select the largest contiguous non-decreasing section."""
-        position_data = np.array([
-            30000, 30003, 30002, 30003, 30002, 30001,
-            30010, 30050, 30100, 30160, 30200,
-        ])
+        position_data = np.array(
+            [
+                30000,
+                30003,
+                30002,
+                30003,
+                30002,
+                30001,
+                30010,
+                30050,
+                30100,
+                30160,
+                30200,
+            ]
+        )
         indices = np.array([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
 
-        result = WireMeasurementAnalysis._get_monotonic_indices(None, position_data, indices)
+        result = WireMeasurementAnalysis._get_monotonic_indices(position_data, indices)
 
         expected = np.array([6, 7, 8, 9, 10])
         np.testing.assert_array_equal(result, expected)
@@ -212,7 +223,7 @@ class TestGetMonotonicIndices(TestCase):
         position_data = np.array([28900.0, 28910.0, 28920.0, 28919.0, 28930.0])
         indices = np.array([0, 1, 2, 3, 4])
 
-        result = WireMeasurementAnalysis._get_monotonic_indices(None, position_data, indices)
+        result = WireMeasurementAnalysis._get_monotonic_indices(position_data, indices)
 
         expected = np.array([0, 1, 2])
         np.testing.assert_array_equal(result, expected)
@@ -243,7 +254,9 @@ class TestWireMeasurementAnalysisOtherMethods(TestCase):
             install_angle=45.0,
         )
         collection_result = WireMeasurementCollectionResult(
-            raw_data=raw_data if raw_data is not None else {wire_name: np.array([0.0, 1.0])},
+            raw_data=raw_data
+            if raw_data is not None
+            else {wire_name: np.array([0.0, 1.0])},
             metadata=metadata,
         )
 
@@ -254,7 +267,7 @@ class TestWireMeasurementAnalysisOtherMethods(TestCase):
 
         result = analysis._create_detector_measurement("TMITLOSS", np.array([1.0, 2.0]))
 
-        self.assertEqual(result.units, "%% beam loss")
+        self.assertEqual(result.units, "% beam loss")
         self.assertEqual(result.label, "TMITLOSS")
         np.testing.assert_array_equal(result.values, np.array([1.0, 2.0]))
 
@@ -317,15 +330,21 @@ class TestWireMeasurementAnalysisOtherMethods(TestCase):
         self.assertIn("D1", x_profile.detectors)
         self.assertIn("TMITLOSS", x_profile.detectors)
         self.assertNotIn("MISSING", x_profile.detectors)
-        np.testing.assert_array_equal(x_profile.detectors["D1"].values, np.array([100.0, 102.0]))
-        np.testing.assert_array_equal(x_profile.detectors["TMITLOSS"].values, np.array([1.0, 3.0]))
+        np.testing.assert_array_equal(
+            x_profile.detectors["D1"].values, np.array([100.0, 102.0])
+        )
+        np.testing.assert_array_equal(
+            x_profile.detectors["TMITLOSS"].values, np.array([1.0, 3.0])
+        )
 
     def test_get_rms_sizes_returns_expected_detector_sigmas(self):
         analysis = self._make_analysis(default_detector="D1")
-        fit_result = _make_fit_result({
-            "x": {"D1": 1.25},
-            "y": {"D1": 2.5},
-        })
+        fit_result = _make_fit_result(
+            {
+                "x": {"D1": 1.25},
+                "y": {"D1": 2.5},
+            }
+        )
 
         x_rms, y_rms = analysis._get_rms_sizes(fit_result)
 
@@ -337,10 +356,12 @@ class TestWireMeasurementAnalysisOtherMethods(TestCase):
             default_detector="D1",
             detectors=["D1", "D2"],
         )
-        fit_result = _make_fit_result({
-            "x": {"D1": 1.25, "D2": 3.5},
-            "y": {"D1": 2.5, "D2": 4.5},
-        })
+        fit_result = _make_fit_result(
+            {
+                "x": {"D1": 1.25, "D2": 3.5},
+                "y": {"D1": 2.5, "D2": 4.5},
+            }
+        )
 
         x_rms, y_rms = analysis._get_rms_sizes(fit_result, detector="D2")
 
@@ -379,18 +400,29 @@ class TestWireMeasurementAnalysisOtherMethods(TestCase):
             )
         }
         expected_fit_result = {
-            "x": FitResult(detectors={"D1": _make_detector_fit(1.0, mean=0.5, amplitude=5.0)})
+            "x": FitResult(
+                detectors={"D1": _make_detector_fit(1.0, mean=0.5, amplitude=5.0)}
+            )
         }
 
-        with patch.object(analysis, "_get_profile_range_indices", return_value=expected_indices) as mock_idx, patch.object(
-            analysis,
-            "_organize_data_by_profile",
-            return_value=expected_profiles,
-        ) as mock_org, patch.object(
-            analysis,
-            "_fit_data_by_profile",
-            return_value=expected_fit_result,
-        ) as mock_fit, patch.object(analysis, "_get_rms_sizes", return_value=(1.0, 2.0)) as mock_rms:
+        with (
+            patch.object(
+                analysis, "_get_profile_range_indices", return_value=expected_indices
+            ) as mock_idx,
+            patch.object(
+                analysis,
+                "_organize_data_by_profile",
+                return_value=expected_profiles,
+            ) as mock_org,
+            patch.object(
+                analysis,
+                "_fit_data_by_profile",
+                return_value=expected_fit_result,
+            ) as mock_fit,
+            patch.object(
+                analysis, "_get_rms_sizes", return_value=(1.0, 2.0)
+            ) as mock_rms,
+        ):
             result = analysis.analyze(rms_detector="D1")
 
         mock_idx.assert_called_once_with()
@@ -399,7 +431,9 @@ class TestWireMeasurementAnalysisOtherMethods(TestCase):
         mock_rms.assert_called_once_with(expected_fit_result, detector="D1")
         self.assertEqual(set(result.fit_result.keys()), {"x"})
         self.assertEqual(result.fit_result["x"].detectors["D1"].sigma, 1.0)
-        np.testing.assert_array_equal(np.asarray(result.rms_sizes), np.array([1.0, 2.0]))
+        np.testing.assert_array_equal(
+            np.asarray(result.rms_sizes), np.array([1.0, 2.0])
+        )
         self.assertEqual(set(result.profiles.keys()), {"x"})
 
 

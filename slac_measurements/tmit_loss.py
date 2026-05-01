@@ -13,7 +13,7 @@ class TMITLoss(Measurement):
     my_buffer: BSABuffer
     beampath: str
     region: str
-    my_wire: Wire
+    beam_profile_device: Wire
 
     # Extra fields to be set after validation
     idx_before: Optional[list] = None
@@ -196,8 +196,8 @@ class TMITLoss(Measurement):
                 f"Invalid region '{self.region}'. Must be one of {valid_regions_str}."
             )
 
-        bpms_before_wire = self.my_wire.metadata.bpms_before_wire
-        bpms_after_wire = self.my_wire.metadata.bpms_after_wire
+        bpms_before_wire = self.beam_profile_device.metadata.bpms_before_wire
+        bpms_after_wire = self.beam_profile_device.metadata.bpms_after_wire
 
         # Create a lookup dictionary for index mapping
         idx_map = {value: idx for idx, value in enumerate(bpms_devices)}

@@ -1,5 +1,3 @@
-from typing import Dict
-
 import numpy as np
 
 from pydantic import BaseModel, ConfigDict
@@ -42,14 +40,14 @@ class DetectorFit(BaseModel):
 
 class FitResult(BaseModel):
     model_config = ConfigDict(arbitrary_types_allowed=True)
-    detectors: Dict[str, DetectorFit]
+    detectors: dict[str, DetectorFit]
 
 
 class WireMeasurementAnalysisResult(BeamProfileMeasurementResult):
     model_config = ConfigDict(arbitrary_types_allowed=True)
-    fit_result: Dict[str, FitResult]
+    fit_result: dict[str, FitResult]
     collection_result: WireMeasurementCollectionResult
-    profiles: Dict[str, ProfileMeasurement]
+    profiles: dict[str, ProfileMeasurement]
 
     def set_rms_detector(self, detector: str | None = None) -> None:
         """Mutate the result to use a different detector for RMS sizes.
@@ -62,9 +60,7 @@ class WireMeasurementAnalysisResult(BeamProfileMeasurementResult):
         """
 
         metadata = self.collection_result.metadata
-        selected_detector = (
-            metadata.default_detector if detector is None else detector
-        )
+        selected_detector = metadata.default_detector if detector is None else detector
 
         if selected_detector not in metadata.detectors:
             raise ValueError(
@@ -79,9 +75,7 @@ class WireMeasurementAnalysisResult(BeamProfileMeasurementResult):
         self.metadata.rms_detector = selected_detector
         self.collection_result.metadata.rms_detector = selected_detector
 
-    def _get_profile_rms(
-        self, profile: str, detector: str
-    ) -> float | None:
+    def _get_profile_rms(self, profile: str, detector: str) -> float | None:
         """Return the RMS size for a profile/detector pair, if present."""
         if profile not in self.fit_result:
             return None
@@ -100,9 +94,7 @@ class WireMeasurementAnalysisResult(BeamProfileMeasurementResult):
         profile_count = len(self.profiles)
         fit_profile_count = len(self.fit_result)
         detector_count = len(meta.detectors)
-        rms_sizes_repr = (
-            self.rms_sizes.tolist() if self.rms_sizes is not None else None
-        )
+        rms_sizes_repr = self.rms_sizes.tolist() if self.rms_sizes is not None else None
 
         return (
             f"WireMeasurementAnalysisResult("
@@ -113,7 +105,7 @@ class WireMeasurementAnalysisResult(BeamProfileMeasurementResult):
             f"profiles={profile_count}, "
             f"fit_profiles={fit_profile_count}, "
             f"detectors={detector_count}, "
-            f"timestamp={meta.timestamp.isoformat()})"
+            f"timestamp={meta.timestamp.isoformat() if meta.timestamp is not None else None})"
         )
 
     def save_to_h5(self, filepath: str) -> None:
@@ -145,6 +137,7 @@ class WireMeasurementAnalysisResult(BeamProfileMeasurementResult):
         import h5py
 
         with h5py.File(filepath, "w") as f:
+
             def _to_h5_float_array(values) -> np.ndarray:
                 """Convert optional numeric-like values to float array for HDF5."""
                 return np.array(
@@ -207,9 +200,7 @@ class WireMeasurementAnalysisResult(BeamProfileMeasurementResult):
             for profile, prof in self.profiles.items():
                 pgrp = profs_grp.create_group(profile)
                 pgrp.create_dataset("positions", data=prof.positions)
-                pgrp.create_dataset(
-                    "profile_indices", data=prof.profile_indices
-                )
+                pgrp.create_dataset("profile_indices", data=prof.profile_indices)
                 dets_grp = pgrp.create_group("detectors")
                 for det_name, det in prof.detectors.items():
                     dg = dets_grp.create_group(det_name)
@@ -257,10 +248,10 @@ def load_from_h5(filepath: str) -> WireMeasurementAnalysisResult:
         # analysis
         analysis_grp = f["analysis"]
 
-        fit_result: Dict[str, FitResult] = {}
+        fit_result: dict[str, FitResult] = {}
         for profile in analysis_grp["fit_result"].keys():
             prof_grp = analysis_grp["fit_result"][profile]
-            dets: Dict[str, DetectorFit] = {}
+            dets: dict[str, DetectorFit] = {}
             for det_name in prof_grp.keys():
                 dg = prof_grp[det_name]
                 dets[det_name] = DetectorFit(
@@ -273,7 +264,7 @@ def load_from_h5(filepath: str) -> WireMeasurementAnalysisResult:
                 )
             fit_result[profile] = FitResult(detectors=dets)
 
-        profiles: Dict[str, ProfileMeasurement] = {}
+        profiles: dict[str, ProfileMeasurement] = {}
         for profile in analysis_grp["profiles"].keys():
             pgrp = analysis_grp["profiles"][profile]
             detectors = {}
