@@ -89,39 +89,6 @@ class EmittanceMeasurementResult(slac_measurements.BaseModel):
     beam_matrix: NDArrayAnnotatedType
     metadata: SerializeAsAny[Any]
 
-class MultiDeviceEmittanceResult(EmittanceMeasurementResult):
-    """
-    EmittanceMeasurementResult stores the results of an emittance measurement.
-
-    Attributes
-    ----------
-    beam_profile_devices_names: List[str]
-        Names of beam profile devices used for measurement
-    beam_profile_devices_z: List[float]
-        z locations of beam profile devices
-
-    Inherited Attributes
-    ----------
-    emittance : shape (2,)
-        The geometric emittance values for x/y in mm-mrad.
-    bmag : List[ndarray], Optional
-        The BMAG values for x/y for each quadrupole strength.
-    twiss : List[ndarray]
-        Twiss parameters (beta, alpha, gamma) calculated at the beam profile device
-        for each quadrupole strength in each plane.
-    rms_beamsizes : List[ndarray]
-        The RMS beam sizes for each quadrupole strength in each plane in meters.
-    beam_matrix : array, shape (2,3)
-        Reconstructed beam matrix at the entrance of the quadrupole for
-        both x/y directions. Elements correspond to (s11,s12,s22) of the beam matrix.
-    info : Any
-        Metadata information related to the measurement.
-
-    """
-
-    beam_profile_devices_names: List[str]
-    beam_profile_devices_z: List[float]
-
 
 class QuadScanEmittanceResult(EmittanceMeasurementResult):
     """
@@ -258,7 +225,7 @@ class EmittanceMeasurementBase(Measurement):
     """
 
     energy: float
-    physics_model: Literal["BMAD", "BLEM", "Lucretia"] = "BLEM"
+    physics_model: Literal["BMAD", "BLEM", "Lucretia"] = "BMAD"
 
     wait_time: PositiveFloat = 5.0
 
@@ -418,7 +385,7 @@ class QuadScanEmittance(Measurement):
 
     rmat: Optional[ndarray] = None
     design_twiss: Optional[dict] = None  # design twiss values
-    physics_model: Literal["BMAD", "BLEM", "Lucretia"] = "BLEM"
+    physics_model: Literal["BMAD", "BLEM", "Lucretia"] = "BMAD"
 
     wait_time: PositiveFloat = 1.0
 
@@ -681,17 +648,13 @@ class MultiDeviceEmittance(EmittanceMeasurementBase):
             Object containing the results of the emittance measurement
 
         """
-        beam_profile_devices_names = [measurement.beam_profile_device.name for measurement in self.beamsize_measurements]
-        beam_profile_devices_z = [measurement.beam_profile_device.metadata.sum_l_meters for measurement in self.beamsize_measurements]
         metadata = self.model_dump()
         results_dict = emittance_dict | {
-            "beam_profile_devices_names": beam_profile_devices_names,
-            "beam_profile_devices_z": beam_profile_devices_z,
             "rms_beamsizes": beam_sizes,
             "metadata": metadata,
         }
 
-        return MultiDeviceEmittanceResult(**results_dict)
+        return EmittanceMeasurementResult(**results_dict)
 
 
 def compute_emit_bmag_quad_scan(
