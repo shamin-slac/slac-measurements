@@ -351,12 +351,14 @@ class MultiDeviceEmittanceTest(TestCase):
         profmon_measurement_1 = Mock(spec=ScreenBeamProfileMeasurement)
         profmon_measurement_1.beam_profile_device = Mock(spec=Screen)
         profmon_measurement_1.beam_profile_device.name = "OTR1"
+        profmon_measurement_1.beam_profile_device.sum_l_meters = 500.0
         profmon_measurement_return_value = Mock(spec=ScreenBeamProfileMeasurementResult)
         profmon_measurement_return_value.rms_sizes = np.array([50.0, 50.0])
         profmon_measurement_1.measure.return_value = profmon_measurement_return_value
         profmon_measurement_2 = Mock(spec=ScreenBeamProfileMeasurement)
         profmon_measurement_2.beam_profile_device = Mock(spec=Screen)
         profmon_measurement_2.beam_profile_device.name = "OTR2"
+        profmon_measurement_2.beam_profile_device.sum_l_meters = 520.0
         profmon_measurement_2_return_value = Mock(
             spec=ScreenBeamProfileMeasurementResult
         )
@@ -365,10 +367,12 @@ class MultiDeviceEmittanceTest(TestCase):
         profmon_measurement_3 = Mock(spec=ScreenBeamProfileMeasurement)
         profmon_measurement_3.beam_profile_device = Mock(spec=Screen)
         profmon_measurement_3.beam_profile_device.name = "OTR3"
+        profmon_measurement_3.beam_profile_device.sum_l_meters = 540.0
         profmon_measurement_3.measure.return_value = profmon_measurement_return_value
         profmon_measurement_4 = Mock(spec=ScreenBeamProfileMeasurement)
         profmon_measurement_4.beam_profile_device = Mock(spec=Screen)
         profmon_measurement_4.beam_profile_device.name = "OTR4"
+        profmon_measurement_4.beam_profile_device.sum_l_meters = 560.0
         profmon_measurement_4.measure.return_value = profmon_measurement_return_value
         beamsize_measurements = [
             profmon_measurement_1,

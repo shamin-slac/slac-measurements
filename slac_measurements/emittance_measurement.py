@@ -697,7 +697,7 @@ class MultiDeviceEmittance(EmittanceMeasurementBase):
 
         """
         beam_profile_devices_names = [measurement.beam_profile_device.name for measurement in self.beamsize_measurements]
-        beam_profile_devices_z = [measurement.beam_profile_device.metadata.sum_l_meters for measurement in self.beamsize_measurements]
+        beam_profile_devices_z = [measurement.beam_profile_device.sum_l_meters for measurement in self.beamsize_measurements]
         metadata = self.model_dump()
         results_dict = emittance_dict | {
             "beam_profile_devices_names": beam_profile_devices_names,
@@ -874,6 +874,7 @@ def compute_emit_bmag_quad_scan_machine_units(
     # Prepare outputs
     results = {
         "emittance": [],
+        "twiss_at_reconstruction": [],
         "twiss": [],
         "beam_matrix": [],
         "bmag": [] if twiss_design is not None else None,
