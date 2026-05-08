@@ -7,6 +7,7 @@ import warnings
 from typing import Literal
 
 import slac_measurements.beam_profile
+from slac_measurements.wires.coordinates import stage_to_beam, beam_to_stage
 from slac_measurements.wires.analysis_results import (
     DetectorFit,
     DetectorProfileMeasurement,
@@ -109,13 +110,9 @@ class WireMeasurementAnalysis(slac_measurements.beam_profile.BeamProfileAnalysis
             profile: str, positions: np.ndarray
         ) -> np.ndarray:
             """Convert stage positions to beam coordinates for a given profile."""
-            scale = _extract_wire_angle()
-            return positions * abs(scale[profile])
-
-        def _extract_wire_angle() -> dict:
-            """Extract the wire install angle (in radians) for coordinate conversion."""
-            rad = np.deg2rad(self.collection_result.metadata.install_angle)
-            return {"x": np.sin(rad), "y": np.cos(rad), "u": 1.0}
+            return stage_to_beam(
+                positions, profile, self.collection_result.metadata.install_angle
+            )
 
         def _fit_detector_in_profile(
             x_beam: np.ndarray, detector_signal: np.ndarray, profile: str
@@ -137,8 +134,9 @@ class WireMeasurementAnalysis(slac_measurements.beam_profile.BeamProfileAnalysis
                 fp = fitting_module.fit(pos=peak_window[0], data=peak_window[1])
 
             # Convert mean from beam coordinates back to stage coordinates
-            scale = _extract_wire_angle()
-            mean_stage = fp["mean"] / abs(scale[profile])
+            mean_stage = beam_to_stage(
+                fp["mean"], profile, self.collection_result.metadata.install_angle
+            )
 
             # Generate fit curve (in beam coordinates)
             # Build kwargs dynamically to handle different fit types

@@ -41,6 +41,9 @@ class WireMeasurementCollectionResult(BeamProfileCollectionResult):
     model_config = ConfigDict(arbitrary_types_allowed=True)
     raw_data: dict[str, Any]
     metadata: MeasurementMetadata
+    jitter_corrected: bool = False
+    jitter_rms_x: float | None = None
+    jitter_rms_y: float | None = None
 
     def __repr__(self) -> str:
         """Return a string representation of the WireMeasurementCollectionResult."""
@@ -76,6 +79,13 @@ class WireMeasurementCollectionResult(BeamProfileCollectionResult):
             # Save raw data
             raw_data_group = f.create_group("raw_data")
             self._save_raw_data(raw_data_group)
+
+            # Save jitter correction info
+            f.attrs["jitter_corrected"] = self.jitter_corrected
+            if self.jitter_rms_x is not None:
+                f.attrs["jitter_rms_x"] = self.jitter_rms_x
+            if self.jitter_rms_y is not None:
+                f.attrs["jitter_rms_y"] = self.jitter_rms_y
 
     def _save_metadata(self, group: h5py.Group) -> None:
         """Save measurement metadata as HDF5 attributes and datasets."""
@@ -152,9 +162,17 @@ def load_from_h5(filepath: str) -> WireMeasurementCollectionResult:
         # Load raw data
         raw_data = _load_raw_data(f["raw_data"])
 
+        # Load jitter correction info
+        jitter_corrected = bool(f.attrs.get("jitter_corrected", False))
+        jitter_rms_x = f.attrs.get("jitter_rms_x", None)
+        jitter_rms_y = f.attrs.get("jitter_rms_y", None)
+
     return WireMeasurementCollectionResult(
         raw_data=raw_data,
         metadata=metadata,
+        jitter_corrected=jitter_corrected,
+        jitter_rms_x=float(jitter_rms_x) if jitter_rms_x is not None else None,
+        jitter_rms_y=float(jitter_rms_y) if jitter_rms_y is not None else None,
     )
 
 

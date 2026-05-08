@@ -2,16 +2,11 @@ import logging
 from abc import ABC, abstractmethod
 from datetime import datetime
 from pathlib import Path
-from typing import Literal
+from typing import Literal, Self
 
-import numpy as np
 from pydantic import model_validator
-from typing_extensions import Self
-
 from slac_devices.wire import Wire
 import slac_measurements.beam_profile
-import slac_measurements.wires.buffer
-import slac_measurements.utils
 from slac_measurements.wires.collection_results import (
     MeasurementMetadata,
     WireMeasurementCollectionResult,
@@ -50,6 +45,7 @@ class BaseWireMeasurementCollection(
     data: dict | None = None
     logger: logging.Logger | None = None
     metadata: MeasurementMetadata | None = None
+    jitter_bpms: bool = False
 
     def measure(self) -> WireMeasurementCollectionResult:
         """
@@ -126,6 +122,7 @@ class BaseWireMeasurementCollection(
             create_by_prefix = {
                 "LBLM": slac_devices.reader.create_lblm,
                 "PMT": slac_devices.reader.create_pmt,
+                "BPM": slac_devices.reader.create_bpm,
             }
 
             creator = next(
@@ -156,6 +153,16 @@ class BaseWireMeasurementCollection(
             detector = _instantiate_device(name, area)
             if detector is not None:
                 devices[name] = detector
+
+        # Add jitter correction BPMs if defined
+        jitter_bpm_names = self.beam_profile_device.metadata.jitter_correction_bpms
+        if jitter_bpm_names:
+            area = self.beam_profile_device.area
+            for name in jitter_bpm_names:
+                bpm = _instantiate_device(name, area)
+                if bpm is not None:
+                    devices[name] = bpm
+            self.jitter_bpms = True
 
         self.logger.info("Device dictionary built.")
         return devices
@@ -206,6 +213,8 @@ class BaseWireMeasurementCollection(
     def _get_data_from_buffer(self) -> dict:
         """Collects wire scan and detector data after buffer completes."""
 
+        import slac_measurements.utils
+
         def _get_buffer_collection_method(device_name: str) -> str | None:
             """Determine the buffer collection method for a given device based on its name."""
 
@@ -215,26 +224,41 @@ class BaseWireMeasurementCollection(
                 return "fast_buffer"
             elif device_name.startswith("PMT"):
                 return "qdcraw_buffer"
+            elif device_name.startswith("BPM"):
+                return "bpm"
             else:
                 return None
 
-        def _collect_device_data(device_name: str) -> np.ndarray:
-            """Collect data for a given device using the appropriate method."""
+        def _collect_device_data(device_name: str, data: dict) -> None:
+            """Collect data for a given device and add to data dict."""
 
             device = self.devices[device_name]
             buffer_method = _get_buffer_collection_method(device_name)
 
             if buffer_method is None:
-                return (
-                    device.measure()
-                )  # For devices like TMITLOSS that don't use buffer collection
+                data[device_name] = device.measure()
+                return
 
-            return slac_measurements.utils.collect_with_size_check(
+            if buffer_method == "bpm":
+                x_data = slac_measurements.utils.collect_with_size_check(
+                    device, "x_buffer", self.my_buffer, self.logger
+                )
+                y_data = slac_measurements.utils.collect_with_size_check(
+                    device, "y_buffer", self.my_buffer, self.logger
+                )
+                data[f"{device_name}:X"] = x_data
+                data[f"{device_name}:Y"] = y_data
+                return
+
+            data[device_name] = slac_measurements.utils.collect_with_size_check(
                 device, buffer_method, self.my_buffer, self.logger
             )
 
         self.logger.info("Getting data from timing buffer ...")
-        data = {name: _collect_device_data(name) for name in self.devices.keys()}
+        data = {}
+        for name in self.devices:
+            _collect_device_data(name, data)
+
         self.logger.info("Data retrieved from buffer. Scan complete.")
         return data
 
