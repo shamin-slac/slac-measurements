@@ -23,7 +23,7 @@ from slac_measurements.model_general_calcs import (
     build_quad_rmat,
     bdes_to_kmod,
     multi_device_optics,
-    get_rmat_after_magnet,
+    get_optics_after_magnet,
     quad_scan_optics,
 )
 import slac_measurements
@@ -225,7 +225,7 @@ class EmittanceMeasurementBase(Measurement):
     """
 
     energy: float
-    physics_model: Literal["BMAD", "BLEM", "Lucretia"] = "BLEM"
+    physics_model: Literal["BMAD", "BLEM", "Lucretia"] = "BMAD"
 
     wait_time: PositiveFloat = 5.0
 
@@ -411,12 +411,14 @@ class QuadScanEmittance(Measurement):
         """
 
         if self.manual_quad_rmats:
-            drift_rmat = get_rmat_after_magnet(
+            optics = get_optics_after_magnet(
                 self.magnet,
-                self.beamsize_measurement,
+                self.beamsize_measurement.beam_profile_device,
                 self.physics_model,
             )
-            self.rmat = np.stack([drift_rmat[0:2, 0:2], drift_rmat[2:4, 2:4]])
+            after_quad_rmat = optics["after_quad_rmat"]
+            self.rmat = np.stack([after_quad_rmat[0:2, 0:2], after_quad_rmat[2:4, 2:4]])
+            self.design_twiss = optics["design_twiss"]
 
         if self.rmat is None or self.rmat.size == 0:
             self.rmat_given = False
@@ -564,7 +566,7 @@ class QuadScanEmittance(Measurement):
         if not self.rmat_given:
             optics = quad_scan_optics(
                 self.magnet,
-                self.beamsize_measurement,
+                self.beamsize_measurement.beam_profile_device,
                 self.physics_model,
             )
             rmat = optics["rmat"]
@@ -619,12 +621,14 @@ class MultiDeviceEmittance(EmittanceMeasurementBase):
         object attributes
 
         """
+        beam_profile_devices = []
         beam_profiles = []
         for beamsize_measurement in self.beamsize_measurements:
+            beam_profile_devices.append(beamsize_measurement.beam_profile_device)
             beam_profiles.append(beamsize_measurement.measure())
 
         optics = multi_device_optics(
-            self.beamsize_measurements,
+            beam_profile_devices,
             self.physics_model,
         )
 
