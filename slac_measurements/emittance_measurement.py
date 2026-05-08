@@ -96,7 +96,7 @@ class EmittanceMeasurementResult(slac_measurements.BaseModel):
 
 class MultiDeviceEmittanceResult(EmittanceMeasurementResult):
     """
-    EmittanceMeasurementResult stores the results of an emittance measurement.
+    MultiDeviceEmittanceResult stores the results of an emittance measurement.
 
     Attributes
     ----------
@@ -130,7 +130,7 @@ class MultiDeviceEmittanceResult(EmittanceMeasurementResult):
 
 class QuadScanEmittanceResult(EmittanceMeasurementResult):
     """
-    EmittanceMeasurementResult stores the results of an emittance measurement.
+    QuadScanEmittanceResult stores the results of an emittance measurement.
 
     Attributes
     ----------
