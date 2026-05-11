@@ -54,6 +54,9 @@ def compute_emit_bmag(
         - 'beam_matrix': numpy.ndarray of shape (batchshape x 3) containing [sig11, sig12, sig22]
           where sig11, sig12, sig22 are the reconstructed beam matrix parameters at the entrance
           of the measurement quad.
+        - 'twiss_at_reconstruction': numpy.ndarray of shape (batchshape x nsteps x 3) containing the
+          reconstructed twiss parameters at the reference point (e.g. right before the quad in a quad 
+          scan or at the reference beam profile device in a multi measurement).
         - 'twiss': numpy.ndarray of shape (batchshape x nsteps x 3) containing the
           reconstructed twiss parameters at each measurement point (e.g. at the beam profile
           device at each point in a quad scan or at each beam profile device in a multi measurement).
@@ -170,8 +173,8 @@ def compute_emit_bmag(
     )
     # result shape (batchshape x 1)
 
-    # get twiss at upstream origin from beam_matrix
-    def _twiss_upstream(b_matrix):
+    # get twiss from beam_matrix
+    def _twiss_from_beam_matrix(b_matrix):
         return np.expand_dims(
             np.stack(
                 (
@@ -185,8 +188,11 @@ def compute_emit_bmag(
             axis=-2,
         )
 
+    # get twiss params from beam matrix
+    rv["twiss_at_reconstruction"] = _twiss_from_beam_matrix(rv["beam_matrix"])
+    
     # propagate twiss params to beam profile device (expand_dims for broadcasting)
-    rv["twiss"] = propagate_twiss(_twiss_upstream(rv["beam_matrix"]), rmat)
+    rv["twiss"] = propagate_twiss(_twiss_from_beam_matrix(rv["beam_matrix"]), rmat)
     # result shape (batchshape x nsteps x 3)
     beta, alpha = (
         rv["twiss"][..., 0],
