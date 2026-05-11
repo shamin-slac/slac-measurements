@@ -6,11 +6,11 @@ from pydantic import ConfigDict
 from scipy.ndimage import median_filter
 from skimage.measure import block_reduce
 from skimage.filters import threshold_triangle
-import lcls_tools
+import slac_measurements
 import warnings
 
 
-class ImageProcessor(lcls_tools.common.BaseModel):
+class ImageProcessor(slac_measurements.BaseModel):
     """
     Image Processing class that allows for background subtraction and roi cropping
     ------------------------
