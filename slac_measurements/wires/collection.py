@@ -117,10 +117,9 @@ class BaseWireMeasurementCollection(
 
             if name == "TMITLOSS":
                 return slac_measurements.tmit_loss.TMITLoss(
-                    my_buffer=self.my_buffer,
-                    my_wire=self.beam_profile_device,
+                    buffer=self.my_buffer,
+                    beam_profile_device=self.beam_profile_device,
                     beampath=self.beampath,
-                    region=self.beam_profile_device.area,
                 )
 
             create_by_prefix = {
