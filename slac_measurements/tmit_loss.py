@@ -6,14 +6,14 @@ from slac_devices.beampath import Beampath
 from slac_devices.reader import create_beampath
 from slac_devices.wire import Wire
 from slac_measurements.measurement import Measurement
-from edef import BSABuffer, EventDefinition
+from slac_timing import Buffer
 
 
 class TMITLoss(Measurement):
     """Measures percentage beam intensity loss across a wire scanner."""
 
     name: str = "TMIT Loss"
-    buffer: BSABuffer | EventDefinition
+    buffer: Buffer
     beampath: str
     beam_profile_device: Wire
 
