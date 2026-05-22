@@ -23,7 +23,7 @@ dependencies = [
     "scikit-image",
     "torch",
     "slac-devices @ git+https://github.com/slaclab/slac-devices.git@main",
-    "slac-timing @ git+https://github.com/slaclab/slac-timing.git@main",
+    "slac-timing @ git+https://github.com/slaclab/slac-timing.git@master",
 ]
 description = "Tools to support high level application development at LCLS using Python"
 dynamic = ["version"]
