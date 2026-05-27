@@ -64,7 +64,13 @@ class TMITLoss(Measurement):
                 print(f"Skipping BPM {name}: no buffer data")
                 rows.append(np.full(n_samples, np.nan))
             else:
-                rows.append(np.asarray(data, dtype=float))
+                arr = np.asarray(data, dtype=float)
+                if len(arr) != n_samples:
+                    padded = np.full(n_samples, np.nan)
+                    n = min(len(arr), n_samples)
+                    padded[:n] = arr[:n]
+                    arr = padded
+                rows.append(arr)
         return np.array(rows)
 
     @staticmethod
