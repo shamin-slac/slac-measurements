@@ -8,6 +8,37 @@ if "edef" not in sys.modules:
 
 from slac_devices.wire import Wire
 from slac_measurements.tmit_loss import TMITLoss
+from slac_timing import Buffer
+
+
+class _TestBuffer(Buffer):
+    """Minimal concrete Buffer for unit tests (no EPICS dependencies)."""
+
+    @property
+    def pv_prefix(self) -> str:
+        return "TEST:SYS0:1"
+
+    def _create_pvs(self):
+        return MagicMock()
+
+    def _reserve(self) -> int:
+        return 1
+
+    def release(self) -> None:
+        pass
+
+    def start(self) -> None:
+        pass
+
+    def stop(self) -> None:
+        pass
+
+    def is_complete(self) -> bool:
+        return True
+
+    @property
+    def num_acquired(self) -> int:
+        return self.n_measurements
 
 
 def _make_mock_bpm(name, z_location, control_name):
@@ -114,7 +145,7 @@ class TestRunSetup(TestCase):
         )
 
         instance = TMITLoss(
-            buffer=MagicMock(),
+            buffer=_TestBuffer(name="TEST", user="test", n_measurements=2),
             beampath="TEST",
             beam_profile_device=wire,
         )
@@ -137,7 +168,7 @@ class TestRunSetup(TestCase):
         )
 
         instance = TMITLoss(
-            buffer=MagicMock(),
+            buffer=_TestBuffer(name="TEST", user="test", n_measurements=2),
             beampath="TEST",
             beam_profile_device=wire,
         )
@@ -159,7 +190,7 @@ class TestRunSetup(TestCase):
         )
 
         instance = TMITLoss(
-            buffer=MagicMock(),
+            buffer=_TestBuffer(name="TEST", user="test", n_measurements=2),
             beampath="TEST",
             beam_profile_device=wire,
         )
@@ -175,7 +206,7 @@ class TestRunSetup(TestCase):
 
         with self.assertRaises(LookupError):
             TMITLoss(
-                buffer=MagicMock(),
+                buffer=_TestBuffer(name="TEST", user="test", n_measurements=2),
                 beampath="TEST",
                 beam_profile_device=wire,
             )
@@ -208,11 +239,8 @@ class TestMeasure(TestCase):
             bpms_after=["BPM_C", "BPM_D"],
         )
 
-        mock_buffer = MagicMock()
-        mock_buffer.n_measurements = 2
-
         instance = TMITLoss(
-            buffer=mock_buffer,
+            buffer=_TestBuffer(name="TEST", user="test", n_measurements=2),
             beampath="TEST",
             beam_profile_device=wire,
         )
@@ -246,11 +274,8 @@ class TestMeasure(TestCase):
             bpms_after=["BPM_C", "BPM_D"],
         )
 
-        mock_buffer = MagicMock()
-        mock_buffer.n_measurements = 2
-
         instance = TMITLoss(
-            buffer=mock_buffer,
+            buffer=_TestBuffer(name="TEST", user="test", n_measurements=2),
             beampath="TEST",
             beam_profile_device=wire,
         )
