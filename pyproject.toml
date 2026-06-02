@@ -22,7 +22,8 @@ dependencies = [
     "h5py",
     "scikit-image",
     "torch",
-    "slac-devices @ git+https://github.com/slaclab/slac-devices.git@main"
+    "slac-devices @ git+https://github.com/slaclab/slac-devices.git@main",
+    "slac-timing @ git+https://github.com/slaclab/slac-timing.git@master",
 ]
 description = "Tools to support high level application development at LCLS using Python"
 dynamic = ["version"]
@@ -33,9 +34,6 @@ requires-python = ">=3.10"
 [project.optional-dependencies]
 meme  = [
     "meme @ git+https://github.com/slaclab/meme.git@main" # note: direct dependency will block PyPI upload
-]
-edef  = [
-    "edef @ git+https://github.com/slaclab/edef.git@main"
 ]
 
 
