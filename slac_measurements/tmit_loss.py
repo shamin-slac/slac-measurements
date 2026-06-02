@@ -55,16 +55,16 @@ class TMITLoss(Measurement):
         all_data = {}
         for area in self._beampath_obj.areas.values():
             if area.bpm_collection:
-                all_data.update(area.bpm_collection.get_buffer_data(self.buffer))
+                all_data.update(
+                    area.bpm_collection.get_buffer_data(self.buffer, pad=True)
+                )
 
-        rows = []
-        for name in bpm_names:
-            data = all_data.get(name)
-            if data is None:
-                print(f"Skipping BPM {name}: no buffer data")
-                rows.append(np.full(n_samples, np.nan))
-            else:
-                rows.append(np.asarray(data, dtype=float))
+        rows = [
+            np.asarray(all_data[name], dtype=float)
+            if name in all_data
+            else np.full(n_samples, np.nan)
+            for name in bpm_names
+        ]
         return np.array(rows)
 
     @staticmethod

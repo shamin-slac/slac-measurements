@@ -11,7 +11,6 @@ from typing_extensions import Self
 from slac_devices.wire import Wire
 import slac_measurements.beam_profile
 import slac_measurements.wires.buffer
-import slac_measurements.utils
 from slac_measurements.wires.collection_results import (
     MeasurementMetadata,
     WireMeasurementCollectionResult,
@@ -224,13 +223,10 @@ class BaseWireMeasurementCollection(
             buffer_method = _get_buffer_collection_method(device_name)
 
             if buffer_method is None:
-                return (
-                    device.measure()
-                )  # For devices like TMITLOSS that don't use buffer collection
+                return device.measure()
 
-            return slac_measurements.utils.collect_with_size_check(
-                device, buffer_method, self.my_buffer, self.logger
-            )
+            method = getattr(device, buffer_method)
+            return method(self.buffer, retries=3, retry_delay=3.0)
 
         self.logger.info("Getting data from timing buffer ...")
         data = {name: _collect_device_data(name) for name in self.devices.keys()}
