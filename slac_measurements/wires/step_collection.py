@@ -108,7 +108,7 @@ class StepWireMeasurementCollection(BaseWireMeasurementCollection):
         self.logger.info("Starting buffer acquisition for step scan...")
         acquisition_start = time.monotonic()
         acquisition_timeout_s = self._calculate_acquisition_timeout_s()
-        self.my_buffer.start()
+        self.buffer.start()
 
         positions = _get_step_positions()
         total_positions = len(positions)
@@ -133,17 +133,17 @@ class StepWireMeasurementCollection(BaseWireMeasurementCollection):
 
         self.logger.info("Waiting for buffer acquisition to complete...")
 
-        while not self.my_buffer.is_acquisition_complete():
+        while not self.buffer.is_complete():
             elapsed_s = time.monotonic() - acquisition_start
             if elapsed_s > acquisition_timeout_s:
                 raise TimeoutError(
-                    f"Timing buffer {self.my_buffer.number} did not complete after "
+                    f"Timing buffer {self.buffer.number} did not complete after "
                     f"{elapsed_s:.1f}s (timeout={acquisition_timeout_s:.1f}s)."
                 )
             time.sleep(0.1)
 
         self.logger.info(
             "Timing buffer %s acquisition complete after %.1f seconds",
-            self.my_buffer.number,
+            self.buffer.number,
             time.monotonic() - acquisition_start,
         )

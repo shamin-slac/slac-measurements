@@ -1,8 +1,13 @@
 import warnings
 from typing import Annotated
+import logging
 import numpy as np
 from pydantic import BeforeValidator
 import time
+
+from slac_devices import Device
+
+from slac_timing import Buffer
 
 
 def calculate_statistics(data: np.ndarray, name):
@@ -19,7 +24,12 @@ def ensure_numpy_array(v):
 
 
 def collect_with_size_check(
-    device, collector_func, buffer, logger, max_retries=3, delay=3
+    device: Device,
+    collector_func: str,
+    buffer: Buffer,
+    logger: logging.Logger | None,
+    max_retries: int = 3,
+    delay: float = 3,
 ):
     """
     Deprecated: Use buffer.get(pv, retries=N, retry_delay=D) instead.
