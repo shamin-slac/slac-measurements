@@ -52,5 +52,4 @@ class WireBeamProfileMeasurement(slac_measurements.beam_profile.BeamProfileMeasu
         return analysis.analyze(
             rms_detector=rms_detector,
             jitter_correction=jitter_correction,
-            beampath=self.beampath,
         )

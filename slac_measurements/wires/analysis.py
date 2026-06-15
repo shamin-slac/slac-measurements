@@ -40,7 +40,6 @@ class WireMeasurementAnalysis(slac_measurements.beam_profile.BeamProfileAnalysis
         self,
         rms_detector: str | None = None,
         jitter_correction: bool = False,
-        beampath: str | None = None,
         physics_model: str = "BLEM",
         include_energy: bool = True,
     ) -> WireMeasurementAnalysisResult:
@@ -55,9 +54,6 @@ class WireMeasurementAnalysis(slac_measurements.beam_profile.BeamProfileAnalysis
         jitter_correction : bool
             If True, compute orbit-fit jitter correction from BPM data
             and subtract per-profile in beam coordinates before fitting.
-        beampath : str, optional
-            Beam path identifier for R-matrix retrieval. Required when
-            jitter_correction is True.
         physics_model : str
             Model source for R-matrix retrieval. Default "BLEM".
         include_energy : bool
@@ -72,8 +68,7 @@ class WireMeasurementAnalysis(slac_measurements.beam_profile.BeamProfileAnalysis
         if jitter_correction:
             from slac_measurements.wires.jitter_correction import compute_jitter
 
-            if beampath is None:
-                raise ValueError("beampath is required when jitter_correction is True.")
+            beampath = self.collection_result.metadata.beampath
             self._jitter_x, self._jitter_y = compute_jitter(
                 self.collection_result, beampath, physics_model, include_energy
             )
