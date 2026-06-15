@@ -106,6 +106,8 @@ def multi_device_optics(
     beam_profile_devices: list[Union[Screen, Wire]], physics_model="BMAD"
 ) -> Dict:
     """Get rmat and twiss from reference device to all measurement devices"""
+    if physics_model == "BLEM":
+        refresh_blem_model()
     model_live = _get_model_from_device(beam_profile_devices[-1], physics_model, use_design=False)
     beam_profile_device_names = [
         beam_profile_device.name for beam_profile_device in beam_profile_devices

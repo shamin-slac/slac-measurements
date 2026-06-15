@@ -1,7 +1,13 @@
+import warnings
 from typing import Annotated
+import logging
 import numpy as np
 from pydantic import BeforeValidator
 import time
+
+from slac_devices import Device
+
+from slac_timing import Buffer
 
 
 def calculate_statistics(data: np.ndarray, name):
@@ -18,22 +24,25 @@ def ensure_numpy_array(v):
 
 
 def collect_with_size_check(
-    device, collector_func, buffer, logger, max_retries=3, delay=3
+    device: Device,
+    collector_func: str,
+    buffer: Buffer,
+    logger: logging.Logger | None,
+    max_retries: int = 3,
+    delay: float = 3,
 ):
     """
+    Deprecated: Use buffer.get(pv, retries=N, retry_delay=D) instead.
+
     Collects data using the provided function and checks its size.
     Retries collection if the data size does not match the expected points.
-    Parameters:
-        device (Device): A slac-tools Device object
-        collector_func (string): Function name (as a string) to collect data.
-        buffer (edef.BSABuffer): Buffer object containing measurement data.
-        logger (logging.Logger): Logger for logging warnings.
-        max_retries (int): Maximum number of retries on size mismatch.
-        delay (float): Delay in seconds between retries.
-        *args, **kwargs: Arguments to pass to the collector function.
-    Returns:
-        Collected data if size matches expected points.
     """
+    warnings.warn(
+        "collect_with_size_check is deprecated. "
+        "Use buffer.get(pv, retries=N) or device.method(buffer, retries=N) instead.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
     method = getattr(device, collector_func)
     for attempt in range(max_retries):
         data = method(buffer)

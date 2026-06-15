@@ -1,0 +1,285 @@
+import sys
+from unittest import TestCase
+from unittest.mock import MagicMock, patch
+import numpy as np
+
+if "edef" not in sys.modules:
+    sys.modules["edef"] = MagicMock()
+
+from slac_devices.wire import Wire
+from slac_measurements.tmit_loss import TMITLoss
+from slac_timing import Buffer
+
+
+class _TestBuffer(Buffer):
+    """Minimal concrete Buffer for unit tests (no EPICS dependencies)."""
+
+    @property
+    def pv_prefix(self) -> str:
+        return "TEST:SYS0:1"
+
+    def _create_pvs(self):
+        return MagicMock()
+
+    def _reserve(self) -> int:
+        return 1
+
+    def release(self) -> None:
+        pass
+
+    def start(self) -> None:
+        pass
+
+    def stop(self) -> None:
+        pass
+
+    def is_complete(self) -> bool:
+        return True
+
+    @property
+    def num_acquired(self) -> int:
+        return self.n_measurements
+
+
+def _make_mock_bpm(name, z_location, control_name):
+    """Create a mock BPM with a name, z_location, and control_name."""
+    bpm = MagicMock()
+    bpm.z_location = z_location
+    bpm.name = name
+    bpm.controls_information.control_name = control_name
+    return bpm
+
+
+def _make_mock_beampath(bpm_dict, buffer_data=None):
+    """Create a mock Beampath with .bpms and .areas for get_buffer_data."""
+    beampath = MagicMock()
+    beampath.bpms = bpm_dict
+
+    area = MagicMock()
+    area.bpm_collection.get_buffer_data.return_value = buffer_data or {}
+    beampath.areas.values.return_value = [area]
+
+    return beampath
+
+
+def _make_wire(bpms_before, bpms_after):
+    """Create a Wire instance with metadata listing upstream/downstream BPM names."""
+    tmitloss = MagicMock()
+    tmitloss.upstream = bpms_before
+    tmitloss.downstream = bpms_after
+    metadata = MagicMock()
+    metadata.tmitloss = tmitloss
+    wire = Wire.model_construct(metadata=metadata)
+    return wire
+
+
+class TestCalcTmitLoss(TestCase):
+    """Test the TMIT loss calculation math in isolation."""
+
+    def test_no_loss_when_all_bpms_identical(self):
+        data = np.array(
+            [
+                [2.0, 4.0, 6.0],
+                [2.0, 4.0, 6.0],
+                [2.0, 4.0, 6.0],
+                [2.0, 4.0, 6.0],
+            ]
+        )
+
+        result = TMITLoss._calc_tmit_loss(data, [0, 1], [2, 3])
+
+        np.testing.assert_allclose(result, [0.0, 0.0, 0.0], atol=1e-10)
+
+    def test_known_loss_values(self):
+        data = np.array(
+            [
+                [2.0, 4.0],
+                [2.0, 4.0],
+                [1.0, 4.0],
+                [1.0, 4.0],
+            ]
+        )
+
+        result = TMITLoss._calc_tmit_loss(data, [0, 1], [2, 3])
+
+        # Hand-computed:
+        # row_medians = [3, 3, 2.5, 2.5]
+        # ironed = [[2/3, 4/3], [2/3, 4/3], [0.4, 1.6], [0.4, 1.6]]
+        # mean_iron_before = [2/3, 4/3]
+        # normed = [[1, 1], [1, 1], [0.6, 1.2], [0.6, 1.2]]
+        # mean_before = [1, 1], mean_after = [0.6, 1.2]
+        # loss = [40, -20]
+        np.testing.assert_allclose(result, [40.0, -20.0], atol=1e-10)
+
+    def test_uniform_fractional_loss_gives_zero(self):
+        """A constant fractional loss across all shots normalizes away."""
+        data = np.array(
+            [
+                [100.0, 200.0, 150.0],
+                [100.0, 200.0, 150.0],
+                [50.0, 100.0, 75.0],
+                [50.0, 100.0, 75.0],
+            ]
+        )
+
+        result = TMITLoss._calc_tmit_loss(data, [0, 1], [2, 3])
+
+        np.testing.assert_allclose(result, [0.0, 0.0, 0.0], atol=1e-10)
+
+
+class TestRunSetup(TestCase):
+    """Test that model validation wires up BPMs and indices correctly."""
+
+    @patch("slac_measurements.tmit_loss.create_beampath")
+    def test_bpms_sorted_by_z_location(self, mock_create_beampath):
+        bpm_a = _make_mock_bpm("BPM_A", z_location=10.0, control_name="BPMS:A")
+        bpm_b = _make_mock_bpm("BPM_B", z_location=5.0, control_name="BPMS:B")
+        bpm_c = _make_mock_bpm("BPM_C", z_location=20.0, control_name="BPMS:C")
+        mock_create_beampath.return_value = _make_mock_beampath(
+            {"BPM_A": bpm_a, "BPM_B": bpm_b, "BPM_C": bpm_c}
+        )
+
+        wire = _make_wire(
+            bpms_before=["BPM_B"],
+            bpms_after=["BPM_C"],
+        )
+
+        instance = TMITLoss(
+            buffer=_TestBuffer(name="TEST", user="test", n_measurements=2),
+            beampath="TEST",
+            beam_profile_device=wire,
+        )
+
+        self.assertEqual(list(instance.bpms.keys()), ["BPM_B", "BPM_A", "BPM_C"])
+
+    @patch("slac_measurements.tmit_loss.create_beampath")
+    def test_indices_resolve_correctly(self, mock_create_beampath):
+        bpm_a = _make_mock_bpm("BPM_A", z_location=1.0, control_name="BPMS:A")
+        bpm_b = _make_mock_bpm("BPM_B", z_location=2.0, control_name="BPMS:B")
+        bpm_c = _make_mock_bpm("BPM_C", z_location=3.0, control_name="BPMS:C")
+        bpm_d = _make_mock_bpm("BPM_D", z_location=4.0, control_name="BPMS:D")
+        mock_create_beampath.return_value = _make_mock_beampath(
+            {"BPM_A": bpm_a, "BPM_B": bpm_b, "BPM_C": bpm_c, "BPM_D": bpm_d}
+        )
+
+        wire = _make_wire(
+            bpms_before=["BPM_A", "BPM_B"],
+            bpms_after=["BPM_C", "BPM_D"],
+        )
+
+        instance = TMITLoss(
+            buffer=_TestBuffer(name="TEST", user="test", n_measurements=2),
+            beampath="TEST",
+            beam_profile_device=wire,
+        )
+
+        self.assertEqual(instance.idx_upstream, [0, 1])
+        self.assertEqual(instance.idx_downstream, [2, 3])
+
+    @patch("slac_measurements.tmit_loss.create_beampath")
+    def test_missing_bpms_skipped(self, mock_create_beampath):
+        bpm_a = _make_mock_bpm("BPM_A", z_location=1.0, control_name="BPMS:A")
+        bpm_b = _make_mock_bpm("BPM_B", z_location=2.0, control_name="BPMS:B")
+        mock_create_beampath.return_value = _make_mock_beampath(
+            {"BPM_A": bpm_a, "BPM_B": bpm_b}
+        )
+
+        wire = _make_wire(
+            bpms_before=["BPM_A", "BPM_MISSING"],
+            bpms_after=["BPM_B", "BPM_GONE"],
+        )
+
+        instance = TMITLoss(
+            buffer=_TestBuffer(name="TEST", user="test", n_measurements=2),
+            beampath="TEST",
+            beam_profile_device=wire,
+        )
+
+        self.assertEqual(instance.idx_upstream, [0])
+        self.assertEqual(instance.idx_downstream, [1])
+
+    @patch("slac_measurements.tmit_loss.create_beampath")
+    def test_empty_beampath_raises(self, mock_create_beampath):
+        mock_create_beampath.return_value = _make_mock_beampath({})
+
+        wire = _make_wire(bpms_before=[], bpms_after=[])
+
+        with self.assertRaises(LookupError):
+            TMITLoss(
+                buffer=_TestBuffer(name="TEST", user="test", n_measurements=2),
+                beampath="TEST",
+                beam_profile_device=wire,
+            )
+
+
+class TestMeasure(TestCase):
+    """Test the full measure pipeline with mocked data collection."""
+
+    @patch("slac_measurements.tmit_loss.create_beampath")
+    def test_measure_returns_numpy_array(self, mock_create_beampath):
+        bpm_a = _make_mock_bpm("BPM_A", z_location=1.0, control_name="BPMS:A")
+        bpm_b = _make_mock_bpm("BPM_B", z_location=2.0, control_name="BPMS:B")
+        bpm_c = _make_mock_bpm("BPM_C", z_location=3.0, control_name="BPMS:C")
+        bpm_d = _make_mock_bpm("BPM_D", z_location=4.0, control_name="BPMS:D")
+
+        buffer_data = {
+            "BPM_A": np.array([2.0, 4.0]),
+            "BPM_B": np.array([2.0, 4.0]),
+            "BPM_C": np.array([2.0, 4.0]),
+            "BPM_D": np.array([2.0, 4.0]),
+        }
+
+        mock_create_beampath.return_value = _make_mock_beampath(
+            {"BPM_A": bpm_a, "BPM_B": bpm_b, "BPM_C": bpm_c, "BPM_D": bpm_d},
+            buffer_data=buffer_data,
+        )
+
+        wire = _make_wire(
+            bpms_before=["BPM_A", "BPM_B"],
+            bpms_after=["BPM_C", "BPM_D"],
+        )
+
+        instance = TMITLoss(
+            buffer=_TestBuffer(name="TEST", user="test", n_measurements=2),
+            beampath="TEST",
+            beam_profile_device=wire,
+        )
+
+        result = instance.measure()
+
+        self.assertIsInstance(result, np.ndarray)
+        np.testing.assert_allclose(result, [0.0, 0.0], atol=1e-10)
+
+    @patch("slac_measurements.tmit_loss.create_beampath")
+    def test_measure_with_loss(self, mock_create_beampath):
+        bpm_a = _make_mock_bpm("BPM_A", z_location=1.0, control_name="BPMS:A")
+        bpm_b = _make_mock_bpm("BPM_B", z_location=2.0, control_name="BPMS:B")
+        bpm_c = _make_mock_bpm("BPM_C", z_location=3.0, control_name="BPMS:C")
+        bpm_d = _make_mock_bpm("BPM_D", z_location=4.0, control_name="BPMS:D")
+
+        buffer_data = {
+            "BPM_A": np.array([2.0, 4.0]),
+            "BPM_B": np.array([2.0, 4.0]),
+            "BPM_C": np.array([1.0, 4.0]),
+            "BPM_D": np.array([1.0, 4.0]),
+        }
+
+        mock_create_beampath.return_value = _make_mock_beampath(
+            {"BPM_A": bpm_a, "BPM_B": bpm_b, "BPM_C": bpm_c, "BPM_D": bpm_d},
+            buffer_data=buffer_data,
+        )
+
+        wire = _make_wire(
+            bpms_before=["BPM_A", "BPM_B"],
+            bpms_after=["BPM_C", "BPM_D"],
+        )
+
+        instance = TMITLoss(
+            buffer=_TestBuffer(name="TEST", user="test", n_measurements=2),
+            beampath="TEST",
+            beam_profile_device=wire,
+        )
+
+        result = instance.measure()
+
+        np.testing.assert_allclose(result, [40.0, -20.0], atol=1e-10)

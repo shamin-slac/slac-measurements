@@ -6,7 +6,9 @@ from typing import Literal, Self
 
 from pydantic import model_validator
 from slac_devices.wire import Wire
+from slac_timing import Buffer
 import slac_measurements.beam_profile
+import slac_measurements.wires.buffer
 from slac_measurements.wires.collection_results import (
     MeasurementMetadata,
     WireMeasurementCollectionResult,
@@ -30,7 +32,7 @@ class BaseWireMeasurementCollection(
     Attributes:
         beam_profile_device (Wire): Wire device for the scan.
         beampath (str): Beamline identifier for buffer and device selection.
-        my_buffer: Timing buffer managing data acquisition.
+        buffer: Timing buffer managing data acquisition.
         devices (dict): Device objects (wire, detectors) used in the scan.
         data (dict): Raw buffered data by device name.
         logger (logging.Logger): File-based measurement logger.
@@ -39,7 +41,7 @@ class BaseWireMeasurementCollection(
     name: str = "Wire Beam Profile Measurement"
     beam_profile_device: Wire
     beampath: str
-    my_buffer: object | None = None
+    buffer: Buffer | None = None
     devices: dict | None = None
     detectors: list | None = None
     data: dict | None = None
@@ -69,14 +71,14 @@ class BaseWireMeasurementCollection(
         def _prepare_runtime_state() -> None:
             """Prepare per-run state that depends on an active timing buffer."""
 
-            self.my_buffer = self._reserve_buffer()
+            self.buffer = self._reserve_buffer()
             self.devices = self._create_device_dictionary()
             self.metadata = self._create_metadata()
 
         def _release_buffer_safely() -> None:
             """Release timing buffer after scan completion."""
 
-            buf = self.my_buffer
+            buf = self.buffer
             if buf is not None:
                 buffer_number = getattr(buf, "number", None)
                 try:
@@ -87,7 +89,7 @@ class BaseWireMeasurementCollection(
                         "Failed while releasing timing buffer %s.", buffer_number
                     )
                 finally:
-                    self.my_buffer = None
+                    self.buffer = None
 
         try:
             _prepare_runtime_state()
@@ -113,10 +115,9 @@ class BaseWireMeasurementCollection(
 
             if name == "TMITLOSS":
                 return slac_measurements.tmit_loss.TMITLoss(
-                    my_buffer=self.my_buffer,
-                    my_wire=self.beam_profile_device,
+                    buffer=self.buffer,
+                    beam_profile_device=self.beam_profile_device,
                     beampath=self.beampath,
-                    region=self.beam_profile_device.area,
                 )
 
             create_by_prefix = {
@@ -198,7 +199,7 @@ class BaseWireMeasurementCollection(
 
         return MeasurementMetadata(
             wire_name=self.beam_profile_device.name,
-            buffer_number=self.my_buffer.number,
+            buffer_number=self.buffer.number,
             area=self.beam_profile_device.area,
             beampath=self.beampath,
             detectors=self.detectors,
@@ -212,8 +213,6 @@ class BaseWireMeasurementCollection(
 
     def _get_data_from_buffer(self) -> dict:
         """Collects wire scan and detector data after buffer completes."""
-
-        import slac_measurements.utils
 
         def _get_buffer_collection_method(device_name: str) -> str | None:
             """Determine the buffer collection method for a given device based on its name."""
@@ -229,56 +228,41 @@ class BaseWireMeasurementCollection(
             else:
                 return None
 
-        def _collect_device_data(device_name: str, data: dict) -> None:
-            """Collect data for a given device and add to data dict."""
+        def _collect_device_data(device_name: str):
+            """Collect data for a given device."""
 
             device = self.devices[device_name]
             buffer_method = _get_buffer_collection_method(device_name)
 
             if buffer_method is None:
-                data[device_name] = device.measure()
-                return
+                return device.measure()
 
-            if buffer_method == "bpm":
-                x_data = slac_measurements.utils.collect_with_size_check(
-                    device, "x_buffer", self.my_buffer, self.logger
-                )
-                y_data = slac_measurements.utils.collect_with_size_check(
-                    device, "y_buffer", self.my_buffer, self.logger
-                )
-                data[f"{device_name}:X"] = x_data
-                data[f"{device_name}:Y"] = y_data
-                return
-
-            data[device_name] = slac_measurements.utils.collect_with_size_check(
-                device, buffer_method, self.my_buffer, self.logger
+            return getattr(device, buffer_method)(
+                self.buffer, retries=3, retry_delay=3.0
             )
 
         self.logger.info("Getting data from timing buffer ...")
-        data = {}
-        for name in self.devices:
-            _collect_device_data(name, data)
-
+        data = {name: _collect_device_data(name) for name in self.devices.keys()}
         self.logger.info("Data retrieved from buffer. Scan complete.")
         return data
 
     def _reserve_buffer(self) -> object:
         """Reserve a timing buffer for the scan based on beampath and wire metadata."""
 
-        if self.my_buffer is None:
-            self.my_buffer = slac_measurements.wires.buffer.reserve_buffer(
+        if self.buffer is None:
+            self.buffer = slac_measurements.wires.buffer.reserve_buffer(
                 beampath=self.beampath,
                 logger=self.logger,
                 pulses=self.beam_profile_device.scan_pulses,
                 beam_rate=self.beam_profile_device.beam_rate,
             )
 
-        return self.my_buffer
+        return self.buffer
 
     def _calculate_acquisition_timeout_s(self) -> float:
         """Return timeout above minimum expected buffer acquisition time."""
 
-        n_points = getattr(self.my_buffer, "n_measurements", None)
+        n_points = getattr(self.buffer, "n_measurements", None)
         if n_points is None or n_points <= 0:
             raise RuntimeError(
                 f"Invalid buffer point count for timeout calculation: {n_points}"
