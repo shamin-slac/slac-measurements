@@ -3,16 +3,20 @@ import numpy as np
 from slac_measurements.wires.collection_results import WireMeasurementCollectionResult
 
 
+_DISPERSION_THRESHOLD = 1e-4
+
+
 def compute_jitter(
     collection_result: WireMeasurementCollectionResult,
     beampath: str,
     physics_model: str = "BLEM",
-    include_energy: bool = True,
 ) -> tuple[np.ndarray, np.ndarray]:
     """Compute per-pulse beam jitter at the wire from BPM data.
 
     Uses BPM position data and transport matrices to reconstruct beam
     position jitter at the wire location via least-squares orbit fit.
+    The dispersion (energy) term is automatically included when the
+    R16/R36 elements are non-negligible.
 
     Parameters
     ----------
@@ -22,8 +26,6 @@ def compute_jitter(
         Beam path identifier for the model (e.g., "SC_HXR", "SC_DIAG0").
     physics_model : str
         Model source for R-matrix retrieval. Default "BLEM".
-    include_energy : bool
-        Whether to include the dispersion (energy) term in the orbit fit.
 
     Returns
     -------
@@ -49,9 +51,7 @@ def compute_jitter(
 
     wire_name = collection_result.metadata.wire_name
 
-    rmat_x, rmat_y = get_jitter_rmat(
-        wire_name, bpm_names, beampath, physics_model, include_energy
-    )
+    rmat_x, rmat_y = get_jitter_rmat(wire_name, bpm_names, beampath, physics_model)
 
     return _compute_orbit_fit(bpm_x_data, bpm_y_data, rmat_x, rmat_y)
 
@@ -61,9 +61,11 @@ def get_jitter_rmat(
     bpm_names: list[str],
     beampath: str,
     physics_model: str = "BLEM",
-    include_energy: bool = True,
 ) -> tuple[np.ndarray, np.ndarray]:
     """Get R-matrices from wire to each BPM for orbit fitting.
+
+    Always fetches R16/R36 (dispersion) columns. The orbit fit will
+    automatically drop them if they are below threshold.
 
     Parameters
     ----------
@@ -75,40 +77,30 @@ def get_jitter_rmat(
         Beam path identifier for the model.
     physics_model : str
         Model source. Default "BLEM".
-    include_energy : bool
-        If True, include R16/R36 dispersion term (3-column matrix).
-        If False, use only R11,R12 / R33,R34 (2-column matrix).
 
     Returns
     -------
     tuple[np.ndarray, np.ndarray]
-        (rmat_x, rmat_y) where:
-        - rmat_x is [N_bpms x 2] (or [N_bpms x 3] with energy)
-        - rmat_y is [N_bpms x 2] (or [N_bpms x 3] with energy)
-        Each row relates BPM position reading to beam state at wire.
+        (rmat_x, rmat_y) where each is [N_bpms x 3] containing
+        [R11, R12, R16] and [R33, R34, R36] respectively.
     """
     from meme.model import Model
 
     model = Model(beampath, model_source=physics_model, use_design=False)
 
-    n_cols = 3 if include_energy else 2
-    rmat_x = np.zeros((len(bpm_names), n_cols))
-    rmat_y = np.zeros((len(bpm_names), n_cols))
+    rmat_x = np.zeros((len(bpm_names), 3))
+    rmat_y = np.zeros((len(bpm_names), 3))
 
     for i, bpm_name in enumerate(bpm_names):
         rmat_6x6 = model.get_rmat(from_device=wire_name, to_device=bpm_name)
 
-        # x plane: position at BPM from (x, x') at wire
         rmat_x[i, 0] = rmat_6x6[0, 0]  # R11
         rmat_x[i, 1] = rmat_6x6[0, 1]  # R12
-        if include_energy:
-            rmat_x[i, 2] = rmat_6x6[0, 5]  # R16
+        rmat_x[i, 2] = rmat_6x6[0, 5]  # R16
 
-        # y plane: position at BPM from (y, y') at wire
         rmat_y[i, 0] = rmat_6x6[2, 2]  # R33
         rmat_y[i, 1] = rmat_6x6[2, 3]  # R34
-        if include_energy:
-            rmat_y[i, 2] = rmat_6x6[2, 5]  # R36
+        rmat_y[i, 2] = rmat_6x6[2, 5]  # R36
 
     return rmat_x, rmat_y
 
@@ -168,6 +160,10 @@ def _compute_orbit_fit(
 ) -> tuple[np.ndarray, np.ndarray]:
     """Compute beam position at wire from BPM readings via least-squares orbit fit.
 
+    The dispersion column (R16/R36) is automatically excluded from the
+    fit if its maximum absolute value is below _DISPERSION_THRESHOLD,
+    matching the legacy MATLAB behavior in beamAnalysis_orbitFit.
+
     Parameters
     ----------
     bpm_x_data : np.ndarray
@@ -175,9 +171,9 @@ def _compute_orbit_fit(
     bpm_y_data : np.ndarray
         BPM y positions [N_bpms x N_pulses] in mm.
     rmat_x : np.ndarray
-        X-plane transport matrix [N_bpms x 2 or 3].
+        X-plane transport matrix [N_bpms x 3] (R11, R12, R16).
     rmat_y : np.ndarray
-        Y-plane transport matrix [N_bpms x 2 or 3].
+        Y-plane transport matrix [N_bpms x 3] (R33, R34, R36).
 
     Returns
     -------
@@ -185,6 +181,12 @@ def _compute_orbit_fit(
         (jitter_x, jitter_y) - reconstructed beam position jitter at wire
         for each pulse, in um (matching wire position units).
     """
+    # Drop dispersion column if negligible
+    if np.max(np.abs(rmat_x[:, 2])) < _DISPERSION_THRESHOLD:
+        rmat_x = rmat_x[:, :2]
+    if np.max(np.abs(rmat_y[:, 2])) < _DISPERSION_THRESHOLD:
+        rmat_y = rmat_y[:, :2]
+
     # Compute deviations from mean (mm)
     delta_x = bpm_x_data - bpm_x_data.mean(axis=1, keepdims=True)
     delta_y = bpm_y_data - bpm_y_data.mean(axis=1, keepdims=True)

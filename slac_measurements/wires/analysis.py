@@ -41,7 +41,6 @@ class WireMeasurementAnalysis(slac_measurements.beam_profile.BeamProfileAnalysis
         rms_detector: str | None = None,
         jitter_correction: bool = False,
         physics_model: str = "BLEM",
-        include_energy: bool = True,
     ) -> WireMeasurementAnalysisResult:
         """
         Fit profiles and extract RMS beam sizes.
@@ -56,8 +55,6 @@ class WireMeasurementAnalysis(slac_measurements.beam_profile.BeamProfileAnalysis
             and subtract per-profile in beam coordinates before fitting.
         physics_model : str
             Model source for R-matrix retrieval. Default "BLEM".
-        include_energy : bool
-            Whether to include the dispersion term in the orbit fit.
 
         Returns
         -------
@@ -70,7 +67,7 @@ class WireMeasurementAnalysis(slac_measurements.beam_profile.BeamProfileAnalysis
 
             beampath = self.collection_result.metadata.beampath
             self._jitter_x, self._jitter_y = compute_jitter(
-                self.collection_result, beampath, physics_model, include_energy
+                self.collection_result, beampath, physics_model
             )
 
         profile_indices = self._get_profile_range_indices()
