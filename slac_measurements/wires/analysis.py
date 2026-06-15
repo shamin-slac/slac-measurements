@@ -83,6 +83,13 @@ class WireMeasurementAnalysis(slac_measurements.beam_profile.BeamProfileAnalysis
             rms_detector if rms_detector is not None else metadata.default_detector
         )
 
+        jitter_rms = None
+        if jitter_correction and self._jitter_x is not None:
+            jitter_rms = (
+                float(np.std(self._jitter_x)),
+                float(np.std(self._jitter_y)),
+            )
+
         return WireMeasurementAnalysisResult(
             fit_result=fit_result,
             rms_sizes=rms_sizes,
@@ -91,6 +98,7 @@ class WireMeasurementAnalysis(slac_measurements.beam_profile.BeamProfileAnalysis
             profiles=profile_measurements,
             fitting_method=self.fitting_method,
             jitter_corrected=jitter_correction,
+            jitter_rms=jitter_rms,
         )
 
     def _create_detector_measurement(

@@ -50,6 +50,7 @@ class WireMeasurementAnalysisResult(BeamProfileMeasurementResult):
     profiles: dict[str, ProfileMeasurement]
     fitting_method: str = "gaussian"
     jitter_corrected: bool = False
+    jitter_rms: tuple[float, float] | None = None
 
     def reanalyze(
         self,
