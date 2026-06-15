@@ -132,34 +132,33 @@ def get_jitter_rmat(
 
 
 def _extract_bpm_data(
-    raw_data: dict[str, np.ndarray],
+    raw_data: dict,
 ) -> tuple[np.ndarray, np.ndarray, list[str]]:
     """Extract BPM x/y position data from raw_data dictionary.
 
-    Identifies BPM data by keys starting with 'BPM' and ending in ':X' / ':Y'.
-    The MAD device name is used as the BPM identifier.
+    BPM entries are keyed by device name (starting with 'BPM') and contain
+    a dict with 'x' and 'y' buffer arrays.
 
     Returns
     -------
     tuple
         (bpm_x_array, bpm_y_array, bpm_names) where arrays are
-        [N_bpms x N_pulses] and bpm_names are MAD device names.
+        [N_bpms x N_pulses] and bpm_names are device names.
     """
-    bpm_x_keys = sorted(k for k in raw_data if k.startswith("BPM") and k.endswith(":X"))
+    bpm_keys = sorted(k for k in raw_data if k.startswith("BPM"))
 
     bpm_names = []
     x_arrays = []
     y_arrays = []
 
-    for x_key in bpm_x_keys:
-        name = x_key[:-2]  # Strip ':X'
-        y_key = f"{name}:Y"
+    for name in bpm_keys:
+        bpm_data = raw_data[name]
 
-        if y_key not in raw_data:
+        if not isinstance(bpm_data, dict):
             continue
 
-        x_arr = raw_data[x_key]
-        y_arr = raw_data[y_key]
+        x_arr = bpm_data.get("x")
+        y_arr = bpm_data.get("y")
 
         if x_arr is None or y_arr is None:
             continue

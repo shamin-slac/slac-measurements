@@ -224,7 +224,7 @@ class BaseWireMeasurementCollection(
             elif device_name.startswith("PMT"):
                 return "qdcraw_buffer"
             elif device_name.startswith("BPM"):
-                return "bpm"
+                return "bpm_buffer"
             else:
                 return None
 
@@ -236,6 +236,12 @@ class BaseWireMeasurementCollection(
 
             if buffer_method is None:
                 return device.measure()
+
+            if buffer_method == "bpm_buffer":
+                return {
+                    "x": device.x_buffer(self.buffer, retries=3, retry_delay=3.0),
+                    "y": device.y_buffer(self.buffer, retries=3, retry_delay=3.0),
+                }
 
             return getattr(device, buffer_method)(
                 self.buffer, retries=3, retry_delay=3.0
