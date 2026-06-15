@@ -22,5 +22,5 @@ from slac_measurements.wires.collection_results import (
 # Collection factory and mode type — for advanced users constructing collections directly
 from slac_measurements.wires.collection import ScanMode, create_wire_collection
 
-# Jitter correction — optional post-collection processing
-from slac_measurements.wires.jitter_correction import correct_jitter
+# Jitter correction — compute beam jitter from BPM data
+from slac_measurements.wires.jitter_correction import compute_jitter

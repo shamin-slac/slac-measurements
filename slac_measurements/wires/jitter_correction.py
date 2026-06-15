@@ -1,20 +1,18 @@
 import numpy as np
 
 from slac_measurements.wires.collection_results import WireMeasurementCollectionResult
-from slac_measurements.wires.coordinates import xy_to_stage
 
 
-def correct_jitter(
+def compute_jitter(
     collection_result: WireMeasurementCollectionResult,
     beampath: str,
     physics_model: str = "BLEM",
     include_energy: bool = True,
-) -> WireMeasurementCollectionResult:
-    """Apply jitter correction to a wire scan collection result.
+) -> tuple[np.ndarray, np.ndarray]:
+    """Compute per-pulse beam jitter at the wire from BPM data.
 
     Uses BPM position data and transport matrices to reconstruct beam
-    position jitter at the wire location, then subtracts it from the
-    wire position data.
+    position jitter at the wire location via least-squares orbit fit.
 
     Parameters
     ----------
@@ -29,9 +27,9 @@ def correct_jitter(
 
     Returns
     -------
-    WireMeasurementCollectionResult
-        New collection result with corrected wire positions,
-        jitter_corrected=True, and jitter_rms_x/jitter_rms_y populated.
+    tuple[np.ndarray, np.ndarray]
+        (jitter_x, jitter_y) per-pulse beam position jitter at the wire
+        in um, one value per buffer pulse.
 
     Raises
     ------
@@ -39,8 +37,6 @@ def correct_jitter(
         If no BPM data is found in the collection result or if fewer than
         2 BPMs have valid data.
     """
-    wire_name = collection_result.metadata.wire_name
-    install_angle = collection_result.metadata.install_angle
     raw_data = collection_result.raw_data
 
     bpm_x_data, bpm_y_data, bpm_names = _extract_bpm_data(raw_data)
@@ -51,27 +47,13 @@ def correct_jitter(
             f"found {len(bpm_names)}."
         )
 
+    wire_name = collection_result.metadata.wire_name
+
     rmat_x, rmat_y = get_jitter_rmat(
         wire_name, bpm_names, beampath, physics_model, include_energy
     )
 
-    wire_positions = raw_data[wire_name].copy()
-
-    jitter_x, jitter_y = _compute_orbit_fit(bpm_x_data, bpm_y_data, rmat_x, rmat_y)
-
-    jitter_stage = xy_to_stage(jitter_x, jitter_y, install_angle)
-    corrected_positions = wire_positions - jitter_stage
-
-    corrected_raw_data = dict(raw_data)
-    corrected_raw_data[wire_name] = corrected_positions
-
-    return WireMeasurementCollectionResult(
-        raw_data=corrected_raw_data,
-        metadata=collection_result.metadata,
-        jitter_corrected=True,
-        jitter_rms_x=float(np.std(jitter_x)),
-        jitter_rms_y=float(np.std(jitter_y)),
-    )
+    return _compute_orbit_fit(bpm_x_data, bpm_y_data, rmat_x, rmat_y)
 
 
 def get_jitter_rmat(

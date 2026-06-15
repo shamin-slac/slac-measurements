@@ -48,6 +48,7 @@ class WireMeasurementAnalysisResult(BeamProfileMeasurementResult):
     fit_result: dict[str, FitResult]
     collection_result: WireMeasurementCollectionResult
     profiles: dict[str, ProfileMeasurement]
+    jitter_corrected: bool = False
 
     def set_rms_detector(self, detector: str | None = None) -> None:
         """Mutate the result to use a different detector for RMS sizes.

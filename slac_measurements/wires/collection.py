@@ -157,7 +157,7 @@ class BaseWireMeasurementCollection(
                 devices[name] = detector
 
         # Add jitter correction BPMs if defined
-        jitter_bpm_names = self.beam_profile_device.metadata.jitter_correction_bpms
+        jitter_bpm_names = self.beam_profile_device.metadata.jitter_bpms
         if jitter_bpm_names:
             area = self.beam_profile_device.area
             for name in jitter_bpm_names:
