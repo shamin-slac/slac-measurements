@@ -105,6 +105,7 @@ class WireMeasurementAnalysisResult(BeamProfileMeasurementResult):
             f"rms_detector='{meta.rms_detector}', "
             f"fitting_method='{self.fitting_method}', "
             f"jitter_corrected={self.jitter_corrected}, "
+            f"jitter_rms={self.jitter_rms}, "
             f"profiles={profile_count}, "
             f"fit_profiles={fit_profile_count}, "
             f"detectors={detector_count}, "

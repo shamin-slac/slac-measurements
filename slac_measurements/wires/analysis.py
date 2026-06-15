@@ -1,6 +1,6 @@
 import importlib
 import numpy as np
-from pydantic import ConfigDict
+from pydantic import ConfigDict, PrivateAttr
 from scipy.ndimage import median_filter
 from skimage.filters import threshold_triangle
 import warnings
@@ -33,8 +33,8 @@ class WireMeasurementAnalysis(slac_measurements.beam_profile.BeamProfileAnalysis
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
     fitting_method: FittingMethod = "gaussian"
-    _jitter_x: np.ndarray | None = None
-    _jitter_y: np.ndarray | None = None
+    _jitter_x: np.ndarray | None = PrivateAttr(default=None)
+    _jitter_y: np.ndarray | None = PrivateAttr(default=None)
 
     def analyze(
         self,
