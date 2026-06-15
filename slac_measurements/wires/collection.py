@@ -47,7 +47,6 @@ class BaseWireMeasurementCollection(
     data: dict | None = None
     logger: logging.Logger | None = None
     metadata: MeasurementMetadata | None = None
-    jitter_bpms: bool = False
 
     def measure(self) -> WireMeasurementCollectionResult:
         """
@@ -163,7 +162,6 @@ class BaseWireMeasurementCollection(
                 bpm = _instantiate_device(name, area)
                 if bpm is not None:
                     devices[name] = bpm
-            self.jitter_bpms = True
 
         self.logger.info("Device dictionary built.")
         return devices
