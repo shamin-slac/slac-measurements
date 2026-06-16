@@ -8,6 +8,7 @@ from typing import Literal
 
 import slac_measurements.beam_profile
 from slac_measurements.wires.coordinates import stage_to_beam, beam_to_stage
+from slac_measurements.wires.jitter_correction import compute_jitter
 from slac_measurements.wires.analysis_results import (
     DetectorFit,
     DetectorProfileMeasurement,
@@ -63,8 +64,6 @@ class WireMeasurementAnalysis(slac_measurements.beam_profile.BeamProfileAnalysis
         """
 
         if jitter_correction:
-            from slac_measurements.wires.jitter_correction import compute_jitter
-
             beampath = self.collection_result.metadata.beampath
             self._jitter_x, self._jitter_y = compute_jitter(
                 self.collection_result, beampath, physics_model

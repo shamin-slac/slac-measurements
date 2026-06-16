@@ -2,6 +2,7 @@ import numpy as np
 
 from pydantic import BaseModel, ConfigDict
 
+from slac_measurements.wires.analysis import WireMeasurementAnalysis
 from slac_measurements.beam_profile import (
     BeamProfileMeasurementResult,
 )
@@ -77,8 +78,6 @@ class WireMeasurementAnalysisResult(BeamProfileMeasurementResult):
         WireMeasurementAnalysisResult
             New analysis result from the same raw collection data.
         """
-        from slac_measurements.wires.analysis import WireMeasurementAnalysis
-
         analysis = WireMeasurementAnalysis(
             collection_result=self.collection_result,
             fitting_method=fitting_method,
