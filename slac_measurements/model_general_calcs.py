@@ -3,6 +3,7 @@ from typing import Dict, Union
 
 import numpy as np
 
+from slac_devices.device import Device
 from slac_devices.magnet import Magnet
 
 from slac_devices.screen import Screen
@@ -75,6 +76,18 @@ def multi_device_optics(
     model_design = _get_model_from_device(beam_profile_devices[-1], physics_model, use_design=True)
     twiss = model_design.get_twiss(device_ref)
     return {"rmat": rmat, "design_twiss": twiss}
+
+
+def get_rmat(device1: Device, device2: Device, physics_model="BMAD"):
+    """Get rmat from device1 to device2"""
+    if physics_model == "BLEM":
+        refresh_blem_model()
+    else:
+        time.sleep(2)
+    model = _get_model_from_device(device1, physics_model, use_design=False)
+    rmat = model.get_rmat(device1.name, device2.name)
+
+    return rmat
 
 
 def refresh_blem_model():
