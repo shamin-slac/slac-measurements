@@ -187,9 +187,13 @@ def _compute_orbit_fit(
     if np.max(np.abs(rmat_y[:, 2])) < _DISPERSION_THRESHOLD:
         rmat_y = rmat_y[:, :2]
 
-    # Compute deviations from mean (mm)
-    delta_x = bpm_x_data - bpm_x_data.mean(axis=1, keepdims=True)
-    delta_y = bpm_y_data - bpm_y_data.mean(axis=1, keepdims=True)
+    # Compute deviations from mean (mm), ignoring NaN pulses.
+    # Residual NaN (from per-pulse BPM dropouts) is replaced with 0
+    # so the orbit fit sees "at the mean" for missing readings.
+    delta_x = bpm_x_data - np.nanmean(bpm_x_data, axis=1, keepdims=True)
+    delta_y = bpm_y_data - np.nanmean(bpm_y_data, axis=1, keepdims=True)
+    np.nan_to_num(delta_x, copy=False)
+    np.nan_to_num(delta_y, copy=False)
 
     # Convert mm -> m for orbit fit
     delta_x_m = delta_x * 1e-3
