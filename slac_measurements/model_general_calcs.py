@@ -27,8 +27,9 @@ def quad_scan_optics(
         to_device=beam_profile_device.name,
     )
     model_design = _get_model_from_device(beam_profile_device, physics_model, use_design=True)
-    twiss = model_design.get_twiss(beam_profile_device.name, pos='beg')
-    return {"rmat": rmat, "design_twiss": twiss}
+    twiss = model_design.get_twiss(magnet.name, pos='beg')
+    energy = model_live.get_twiss(magnet.name, pos='beg')['p0c']
+    return {"rmat": rmat, "design_twiss": twiss, "energy": energy}
 
 
 def get_optics_after_magnet(
@@ -75,7 +76,8 @@ def multi_device_optics(
     rmat = np.array(rmat)
     model_design = _get_model_from_device(beam_profile_devices[-1], physics_model, use_design=True)
     twiss = model_design.get_twiss(device_ref)
-    return {"rmat": rmat, "design_twiss": twiss}
+    energy = model_live.get_twiss(device_ref)['p0c']
+    return {"rmat": rmat, "design_twiss": twiss, "energy": energy}
 
 
 def get_rmat(device1: Device, device2: Device, physics_model="BMAD"):
