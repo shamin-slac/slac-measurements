@@ -80,14 +80,14 @@ def multi_device_optics(
     return {"rmat": rmat, "design_twiss": twiss, "energy": energy}
 
 
-def get_rmat(device1: Device, device2: Device, physics_model="BMAD"):
+def get_rmat(device1: Device, device2: Device, physics_model="BMAD", device1_pos='beg', device2_pos='end'):
     """Get rmat from device1 to device2"""
     if physics_model == "BLEM":
         refresh_blem_model()
     else:
         time.sleep(2)
     model = _get_model_from_device(device1, physics_model, use_design=False)
-    rmat = model.get_rmat(device1.name, device2.name)
+    rmat = model.get_rmat(device1.name, device2.name, from_device_pos=device1_pos, to_device_pos=device2_pos)
 
     return rmat
 
