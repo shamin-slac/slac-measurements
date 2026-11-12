@@ -12,8 +12,12 @@ import warnings
 
 
 class ImageFitResult(slac_measurements.BaseModel):
-    centroid: List[float] = Field(min_length=2, max_length=2)
-    rms_size: List[float] = Field(min_length=2, max_length=2)
+    centroid: List[float] = Field(
+        min_length=2, max_length=2, description="Centroid in (x, y) order"
+    )
+    rms_size: List[float] = Field(
+        min_length=2, max_length=2, description="RMS size in (x, y) order"
+    )
     total_intensity: PositiveFloat
     image: NDArrayAnnotatedType
 
@@ -133,6 +137,7 @@ class ImageProjectionFit(ImageFit):
     )
 
     def _fit_image(self, image: ndarray) -> ImageProjectionFitResult:
+        # image is indexed image[x, y]: summing over y (axis 1) gives the x projection
         dimensions = ("x", "y")
         fit_parameters = []
         signal_to_noise_ratios = []
@@ -141,8 +146,8 @@ class ImageProjectionFit(ImageFit):
 
         module = importlib.import_module(f"slac_measurements.fitting.{self.fit_module}")
 
-        for axis, dim in enumerate(dimensions):
-            projection = np.array(np.sum(image, axis=axis))
+        for sum_axis, dim in zip((1, 0), dimensions):
+            projection = np.array(np.sum(image, axis=sum_axis))
             x = np.arange(len(projection))
             parameters = module.fit(x, projection, use_prior=self.use_prior)
 
@@ -212,6 +217,6 @@ class ImageProjectionFit(ImageFit):
                 warnings.warn(
                     f"Projection in {dim} had a low amplitude relative to noise"
                 )
-                return ImageProjectionFitFailureMode.LOW_SIGNAL_TO_NOISE
+                return ImageProjectionFitFailureMode.LOW_SIGNAL_TO_NOISE_RATIO
 
         return ImageProjectionFitFailureMode.NONE

@@ -5,6 +5,7 @@ from slac_measurements.screen_profile import (
     ScreenBeamProfileMeasurement,
     ScreenBeamProfileMeasurementResult,
 )
+from slac_measurements.image.processing import ImageProcessor
 import numpy as np
 
 
@@ -36,6 +37,24 @@ class TestScreenBeamProfileMeasurement(unittest.TestCase):
         )
 
         assert result.metadata == measurement.model_dump()
+
+    def test_off_center_centroid_is_xy(self):
+        x, y = np.indices((100, 200))
+        image = 255 * np.exp(-0.5 * (((x - 30) / 3) ** 2 + ((y - 140) / 6) ** 2))
+        type(self.screen).image = property(lambda *args: image)
+
+        for processor in [
+            ImageProcessor(),
+            ImageProcessor(center=True),
+            ImageProcessor(crop=True),
+            ImageProcessor(center=True, crop=True),
+        ]:
+            measurement = ScreenBeamProfileMeasurement(
+                beam_profile_device=self.screen, image_processor=processor
+            )
+            result = measurement.measure()
+            assert np.allclose(result.centroids.flatten(), [30, 140], atol=0.5)
+            assert np.allclose(result.rms_sizes, [3, 6], atol=0.5)
 
     def test_measure_without_fitting(self):
         measurement = ScreenBeamProfileMeasurement(

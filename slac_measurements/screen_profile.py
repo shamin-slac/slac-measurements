@@ -24,14 +24,14 @@ class ScreenBeamProfileMeasurementResult(BeamProfileMeasurementResult):
     processed_images : ndarray
         Numpy array of processed images taken during the measurement
     rms_sizes_all: ndarray
-        Numpy array of rms sizes for all shots for each axis (um)
+        Numpy array of rms sizes for all shots in (x, y) order (um)
 
     Inherited Attributes
     ----------
     rms_sizes : ndarray
-        Numpy array of rms sizes averaged over all shots in microns.
+        Numpy array of rms sizes averaged over all shots in (x, y) order in microns.
     centroids : ndarray
-        Numpy array of centroids of the beam in microns.
+        Numpy array of centroids of the beam in (x, y) order in microns.
     total_intensities : ndarray
         Numpy array of total intensities of the beam.
     metadata : Any
@@ -122,16 +122,16 @@ class ScreenBeamProfileMeasurement(BeamProfileMeasurement):
         processed_images : ndarray
             Numpy array of processed images to be fitted
         offsets : ndarray, optional
-            Offsets of the processed images with respect to the original images
+            Offsets in (x, y) order of the processed images with respect to the original images
 
         Returns
         -------
         rms_sizes_all : ndarray
-            Numpy array of rms sizes for all shots for each axis (um)
+            Numpy array of rms sizes for all shots in (x, y) order (um)
         rms_sizes : ndarray
-            Numpy array of rms sizes averaged over all shots in microns.
+            Numpy array of rms sizes averaged over all shots in (x, y) order in microns.
         centroids : ndarray
-            Numpy array of centroids of the beam in microns.
+            Numpy array of centroids of the beam in (x, y) order in microns.
         total_intensities : ndarray
             Numpy array of total intensities of the beam in arbitrary units.
         signal_to_noise_ratios : ndarray
@@ -155,7 +155,7 @@ class ScreenBeamProfileMeasurement(BeamProfileMeasurement):
             signal_to_noise_ratios_all.append(fit_result.signal_to_noise_ratio)
 
         rms_sizes = np.mean(rms_sizes_all, axis=0)
-        centroids = np.mean(centroids_all + offsets, axis=0)
+        centroids = np.mean(np.array(centroids_all) + offsets, axis=0)
 
         # convert from pixels to microns
         rms_sizes_all = np.array(rms_sizes_all) * self.beam_profile_device.resolution

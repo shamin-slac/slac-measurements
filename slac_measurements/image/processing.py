@@ -76,7 +76,7 @@ class ImageProcessor(slac_measurements.BaseModel):
         np.ndarray
             Processed images
         np.ndarray
-            If specified, offsets of the image with respect to the original images.
+            If specified, offsets in (x, y) order of the image with respect to the original images.
 
         """
         processed_images, offsets = process_images(
@@ -101,7 +101,7 @@ def compute_blob_stats(image):
     Parameters
     ----------
     image : np.ndarray
-        2D array representing the image. Shape should be (height (y size), width (x size)).
+        2D array representing the image. Indexed as image[x, y].
 
     Returns
     -------
@@ -116,7 +116,7 @@ def compute_blob_stats(image):
         raise ValueError("Input image must be a 2D array")
 
     # Get coordinate grids
-    y_indices, x_indices = np.indices(image.shape)
+    x_indices, y_indices = np.indices(image.shape)
 
     # Flatten everything
     x = x_indices.ravel()
@@ -141,6 +141,11 @@ def compute_blob_stats(image):
     return {"x_center": x_center, "y_center": y_center, "x_rms": x_rms, "y_rms": y_rms}
 
 
+def image_center(images: np.ndarray) -> np.ndarray:
+    """Return the center pixel of the images in (x, y) order."""
+    return np.array(images.shape[-2:]) // 2
+
+
 def calc_image_centroids(
     images: np.ndarray, image_fitter: Callable = compute_blob_stats
 ) -> np.ndarray:
@@ -150,14 +155,14 @@ def calc_image_centroids(
     Parameters
     ----------
     images : np.ndarray
-        Batch of images with shape (..., height (y size), width (x size)).
+        Batch of images with shape (..., x size, y size).
     image_fitter : Callable, optional
         Function that returns a dictonary of statistics for a single image.
 
     Returns
     -------
     np.ndarray
-        Array of centroids with shape (..., 2), where the last dimension is (x, y) coordinates.
+        Array of centroids with shape (..., 2), in (x, y) order.
     """
 
     batch_shape = images.shape[:-2]
@@ -166,7 +171,7 @@ def calc_image_centroids(
 
     for i in range(flattened_images.shape[0]):
         stats = image_fitter(flattened_images[i])
-        flattened_centroids[i] = [stats["y_center"], stats["x_center"]]
+        flattened_centroids[i] = [stats["x_center"], stats["y_center"]]
 
     return flattened_centroids.reshape(batch_shape + (2,))
 
@@ -183,9 +188,9 @@ def center_images(
     Parameters
     ----------
     images : np.ndarray
-        Batch of images with shape (..., height (y size), width (x size)).
+        Batch of images with shape (..., x size, y size).
     image_centroids : np.ndarray
-        Array of centroid coordinates for each image, shape (..., 2).
+        Array of centroid coordinates for each image, shape (..., 2), in (x, y) order.
 
     Returns
     -------
@@ -193,8 +198,7 @@ def center_images(
         Batch of centered images with the same shape as the input.
     """
 
-    center_location = np.array(images.shape[-2:]) // 2
-    center_location = center_location[::-1]
+    center_location = image_center(images)
 
     # Flatten batch dimensions
     flattened_images = images.reshape((-1,) + images.shape[-2:])
@@ -202,10 +206,10 @@ def center_images(
     centered_images = np.zeros_like(flattened_images)
 
     for i in range(flattened_images.shape[0]):
-        # Shift the images to center them
+        shift = center_location - flattened_centroids[i]
         centered_images[i] = scipy.ndimage.shift(
             flattened_images[i],
-            (center_location - flattened_centroids[i]),
+            shift,
             order=1,  # Linear interpolation to avoid artifacts
         )
 
@@ -227,7 +231,7 @@ def calc_crop_ranges(
     Parameters
     ----------
     images : np.ndarray
-        Batch of images with shape (..., height (y size), width (x size)).
+        Batch of images with shape (..., x size, y size).
     n_stds : int, optional
         Number of standard deviations (RMS size) to include in the crop range. Default is 8.
     image_fitter : Callable, optional
@@ -255,8 +259,8 @@ def calc_crop_ranges(
     total_image[total_image < threshold] = 0
 
     stats = image_fitter(total_image)
-    centroid = np.array([stats["y_center"], stats["x_center"]])
-    rms_size = np.array([stats["y_rms"], stats["x_rms"]])
+    centroid = np.array([stats["x_center"], stats["y_center"]])
+    rms_size = np.array([stats["x_rms"], stats["y_rms"]])
 
     crop_ranges = np.array(
         [
@@ -264,7 +268,7 @@ def calc_crop_ranges(
             (centroid + n_stds * rms_size).astype("int"),
         ]
     )
-    crop_ranges = crop_ranges.T  # Transpose to match (start_x, end_x), (start_y, end_y)
+    crop_ranges = crop_ranges.T
 
     return crop_ranges
 
@@ -279,7 +283,7 @@ def crop_images(
     Parameters
     ----------
     images : np.ndarray
-        A batch of images to be cropped. The shape should be (..., height (y_size), width (x_size)).
+        A batch of images to be cropped. The shape should be (..., x size, y size).
     crop_ranges : np.ndarray
         An array specifying the crop ranges for x,y. Should be of shape (2, 2),
         where crop_ranges[0] is [start_x, end_x] and crop_ranges[1] is [start_y, end_y].
@@ -293,18 +297,12 @@ def crop_images(
         raise ValueError("crop_ranges must be of shape (2, 2)")
 
     if images.ndim < 2:
-        raise ValueError(
-            "images must have at least 2 dimensions (batch, height, width)"
-        )
+        raise ValueError("images must have at least 2 dimensions (x, y)")
 
-    crop_ranges[0] = np.clip(crop_ranges[0], 0, images.shape[-2])
-    crop_ranges[1] = np.clip(crop_ranges[1], 0, images.shape[-1])
+    x_start, x_end = np.clip(crop_ranges[0], 0, images.shape[-2])
+    y_start, y_end = np.clip(crop_ranges[1], 0, images.shape[-1])
 
-    cropped_images = images[
-        ...,
-        crop_ranges[0][0] : crop_ranges[0][1],
-        crop_ranges[1][0] : crop_ranges[1][1],
-    ]
+    cropped_images = images[..., x_start:x_end, y_start:y_end]
 
     return cropped_images
 
@@ -316,7 +314,7 @@ def pool_images(images: np.ndarray, pool_size) -> np.ndarray:
     Parameters
     ----------
     images : np.ndarray
-        Input array of images. The last two dimensions are assumed to be spatial (height, width).
+        Input array of images. The last two dimensions are assumed to be spatial (x, y).
     pool_size : Optional[int], optional
         Size of the pooling window along each spatial dimension. If None, no pooling is applied.
 
@@ -357,7 +355,7 @@ def process_images(
     Parameters
     ----------
     images : np.ndarray
-        Batch of images with shape (..., height (y size), width (x size)).
+        Batch of images with shape (..., x size, y size).
     image_fitter : Callable, optional
         Function that fits an image and returns a dictionary of statistics in pixel coordinates.
     pool_size : int, optional
@@ -375,16 +373,17 @@ def process_images(
     crop : bool, optional
         If True, crop images using fitted centroid and RMS size. Default is False.
     image_centroids : np.ndarray, optional
-        Precomputed centroids for centering. If None, computed internally.
+        Precomputed centroids for centering, in (x, y) order. If None, computed internally.
     crop_ranges : np.ndarray, optional
-        Precomputed crop ranges. If None, computed internally.
+        Precomputed crop ranges, [[start_x, end_x], [start_y, end_y]]. If None, computed internally.
 
     Returns
     -------
     np.ndarray
         Processed images
     np.ndarray
-        Offsets of the image centers with respect to the original images.
+        Offsets in (x, y) order. Adding them to a position in the processed image
+        gives the position in the original image.
     """
 
     batch_shape = images.shape[:-2]
@@ -405,6 +404,7 @@ def process_images(
     images = np.clip(images - threshold_multiplier * threshold, 0, None)
 
     # center the images
+    centered = False
     if center:
         try:
             if image_centroids is None:
@@ -412,6 +412,7 @@ def process_images(
                     images, image_fitter=image_fitter
                 )
             centered_images = center_images(images, image_centroids)
+            centered = True
         except ValueError as e:
             warnings.warn(f"Could not center images: {e}")
             centered_images = images
@@ -419,6 +420,7 @@ def process_images(
         centered_images = images
 
     # crop the images
+    cropped = False
     if crop:
         try:
             if crop_ranges is None:
@@ -436,6 +438,8 @@ def process_images(
             if np.any(np.array(cropped_images.shape) == 0):
                 warnings.warn("Cropping tried to create zero sized array. Reverting")
                 cropped_images = centered_images
+            else:
+                cropped = True
         except ValueError as e:
             warnings.warn(f"Could not crop images: {e}")
             cropped_images = centered_images
@@ -448,19 +452,14 @@ def process_images(
     else:
         pooled_images = cropped_images
 
-    # using the cropping and centering info, determine the offset of
-    # the image center with respect to the original image
+    # offsets map processed pixel positions back to the original image
     if len(batch_shape) == 0:
         batch_shape = (1,)
 
     offsets = np.zeros((*batch_shape, 2))
-    if center:
-        if image_centroids is not None:
-            image_center = np.array(images.shape[-2:]) / 2
-            offsets += image_center - image_centroids
-    if crop:
-        if crop_ranges is not None:
-            crop_start = crop_ranges[:, 0]
-            offsets += crop_start
+    if centered:
+        offsets += image_centroids - image_center(images)
+    if cropped:
+        offsets += np.clip(crop_ranges[:, 0], 0, None)
 
     return pooled_images, offsets
