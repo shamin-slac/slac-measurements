@@ -12,6 +12,7 @@ def compute_emit_bmag(
     rmat: np.ndarray,
     twiss_design: np.ndarray = None,
     weighted_fit: bool = False,
+    beam_sizes_err: np.ndarray = None,
     maxiter: int = None,
 ):
     """
@@ -109,7 +110,10 @@ def compute_emit_bmag(
             sig = torch.stack(beam_matrix_tuple(params), dim=-1).unsqueeze(-1)
             # sig should now be shape batchshape x 3 x 1 (column vectors)
             if weighted_fit:
-                weights = 1.0 / beamsize_squared.sqrt()
+                if beam_sizes_err is not None:
+                    weights = 1.0 / beam_sizes_err
+                else:
+                    weights = 1.0 / beamsize_squared.sqrt()
             else:
                 weights = 1.0
             total_abs_error = (
@@ -136,7 +140,10 @@ def compute_emit_bmag(
             sig = np.expand_dims(np.stack(beam_matrix_tuple(params), axis=-1), axis=-1)
             # sig should now be shape batchshape x 3 x 1 (column vectors)
             if weighted_fit:
-                weights = 1.0 / np.sqrt(beamsize_squared)
+                if beam_sizes_err is not None:
+                    weights = 1.0 / beam_sizes_err
+                else:
+                    weights = 1.0 / np.sqrt(beamsize_squared)
             else:
                 weights = 1.0
             total_abs_error = np.nansum(
@@ -240,6 +247,11 @@ def compute_emit_bmag(
     else:
         rv["bmag"] = None
         rv["phase_advances"] = None
+
+    fit_sig = np.expand_dims(np.stack(beam_matrix_tuple(fit_params), axis=-1), axis=-1)
+    pred_beam_sizes = np.array(np.sqrt(amat @ fit_sig))
+    beam_sizes = np.array(np.sqrt(beamsize_squared))
+    rv["chi_squared"] = np.sum(((pred_beam_sizes-beam_sizes)/beam_sizes_err)**2, axis=1)
 
     return rv
 

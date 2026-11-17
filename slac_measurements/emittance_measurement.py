@@ -65,11 +65,13 @@ class EmittanceMeasurementResult(slac_measurements.BaseModel):
     geometric_emittance: NDArrayAnnotatedType
     bmag: Optional[NDArrayAnnotatedType] = None
     phase_advances: Optional[NDArrayAnnotatedType] = None
+    chi_squared: Optional[NDArrayAnnotatedType] = None
     twiss: NDArrayAnnotatedType
     twiss_at_reconstruction: NDArrayAnnotatedType
     rmats: Optional[NDArrayAnnotatedType] = None
     design_twiss: Optional[NDArrayAnnotatedType] = None
     rms_beamsizes: NDArrayAnnotatedType
+    beam_sizes_err: Optional[NDArrayAnnotatedType] = None
     beam_matrix: NDArrayAnnotatedType
     energy: float
     metadata: Optional[SerializeAsAny[Any]] = None
