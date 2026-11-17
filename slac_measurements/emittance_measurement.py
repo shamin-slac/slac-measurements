@@ -1,6 +1,5 @@
 from abc import abstractmethod
 import time
-import enum
 from typing import Any, List, Literal, Optional
 
 import numpy as np
@@ -75,6 +74,7 @@ class EmittanceMeasurementResult(slac_measurements.BaseModel):
     beam_matrix: NDArrayAnnotatedType
     energy: float
     metadata: Optional[SerializeAsAny[Any]] = None
+
 
 class MultiDeviceEmittanceResult(EmittanceMeasurementResult):
     """
@@ -478,7 +478,9 @@ class QuadScanEmittance(Measurement):
                 # compute emittance and bmag
                 result = compute_emit_bmag(**emit_kwargs)
                 result["geometric_emittance"] = result["emittance"]
-                result["emittance"] = normalize_emittance(result["emittance"], self.energy)
+                result["emittance"] = normalize_emittance(
+                    result["emittance"], self.energy
+                )
 
                 result.update(
                     {
@@ -508,10 +510,12 @@ class QuadScanEmittance(Measurement):
             }
             # Call wrapper that takes quads in machine units and beamsize in meters
             results = compute_emit_bmag_quad_scan_machine_units(**inputs)
-        
+
         metadata = self.model_dump()
         if isinstance(self.beamsize_measurement, ScreenBeamProfileMeasurement):
-            metadata["resolution"] = self.beamsize_measurement.beam_profile_device.resolution
+            metadata["resolution"] = (
+                self.beamsize_measurement.beam_profile_device.resolution
+            )
             metadata["image_data"] = {
                 str(sval): ele.model_dump()
                 for sval, ele in zip(self.scan_values, self._info)
@@ -633,8 +637,14 @@ class MultiDeviceEmittance(EmittanceMeasurementBase):
             Object containing the results of the emittance measurement
 
         """
-        beam_profile_devices_names = [measurement.beam_profile_device.name for measurement in self.beamsize_measurements]
-        beam_profile_devices_z = [measurement.beam_profile_device.sum_l_meters for measurement in self.beamsize_measurements]
+        beam_profile_devices_names = [
+            measurement.beam_profile_device.name
+            for measurement in self.beamsize_measurements
+        ]
+        beam_profile_devices_z = [
+            measurement.beam_profile_device.sum_l_meters
+            for measurement in self.beamsize_measurements
+        ]
         metadata = self.model_dump()
         results_dict = emittance_dict | {
             "rms_beamsizes": beam_sizes,

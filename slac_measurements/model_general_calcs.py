@@ -8,7 +8,6 @@ from slac_devices.magnet import Magnet
 
 from slac_devices.screen import Screen
 from slac_devices.wire import Wire
-from slac_measurements.beam_profile import BeamProfileMeasurement
 
 
 def quad_scan_optics(
@@ -21,14 +20,18 @@ def quad_scan_optics(
         refresh_blem_model()
     else:
         time.sleep(2)
-    model_live = _get_model_from_device(beam_profile_device, physics_model, use_design=False)
+    model_live = _get_model_from_device(
+        beam_profile_device, physics_model, use_design=False
+    )
     rmat = model_live.get_rmat(
         from_device=magnet.name,
         to_device=beam_profile_device.name,
     )
-    model_design = _get_model_from_device(beam_profile_device, physics_model, use_design=True)
-    twiss = model_design.get_twiss(magnet.name, pos='beg')
-    energy = model_live.get_twiss(magnet.name, pos='beg')['p0c'] / 1e9  # GeV
+    model_design = _get_model_from_device(
+        beam_profile_device, physics_model, use_design=True
+    )
+    twiss = model_design.get_twiss(magnet.name, pos="beg")
+    energy = model_live.get_twiss(magnet.name, pos="beg")["p0c"] / 1e9  # GeV
     return {"rmat": rmat, "design_twiss": twiss, "energy": energy}
 
 
@@ -41,7 +44,9 @@ def get_optics_after_magnet(
         refresh_blem_model()
     else:
         time.sleep(2)
-    model_live = _get_model_from_device(beam_profile_device, physics_model, use_design=False)
+    model_live = _get_model_from_device(
+        beam_profile_device, physics_model, use_design=False
+    )
     full_rmat = model_live.get_rmat(
         from_device=magnet.name,
         to_device=beam_profile_device.name,
@@ -51,10 +56,12 @@ def get_optics_after_magnet(
         to_device=magnet.name,
     )
     after_quad_rmat = full_rmat @ np.linalg.inv(quad_rmat)
-    model_design = _get_model_from_device(beam_profile_device, physics_model, use_design=True)
-    twiss = model_design.get_twiss(beam_profile_device.name, pos='beg')
-    energy = model_live.get_twiss(magnet.name, pos='beg')['p0c'] / 1e9  # GeV
-    return {"after_quad_rmat": after_quad_rmat, "design_twiss": twiss}
+    model_design = _get_model_from_device(
+        beam_profile_device, physics_model, use_design=True
+    )
+    twiss = model_design.get_twiss(beam_profile_device.name, pos="beg")
+    energy = model_live.get_twiss(magnet.name, pos="beg")["p0c"] / 1e9  # GeV
+    return {"after_quad_rmat": after_quad_rmat, "design_twiss": twiss, "energy": energy}
 
 
 def multi_device_optics(
@@ -65,7 +72,9 @@ def multi_device_optics(
         refresh_blem_model()
     else:
         time.sleep(2)
-    model_live = _get_model_from_device(beam_profile_devices[-1], physics_model, use_design=False)
+    model_live = _get_model_from_device(
+        beam_profile_devices[-1], physics_model, use_design=False
+    )
     beam_profile_device_names = [
         beam_profile_device.name for beam_profile_device in beam_profile_devices
     ]
@@ -75,20 +84,33 @@ def multi_device_optics(
     for device in beam_profile_device_names:
         rmat.append(model_live.get_rmat(device_ref, device))
     rmat = np.array(rmat)
-    model_design = _get_model_from_device(beam_profile_devices[-1], physics_model, use_design=True)
+    model_design = _get_model_from_device(
+        beam_profile_devices[-1], physics_model, use_design=True
+    )
     twiss = model_design.get_twiss(device_ref)
-    energy = model_live.get_twiss(device_ref)['p0c'] / 1e9  # GeV
+    energy = model_live.get_twiss(device_ref)["p0c"] / 1e9  # GeV
     return {"rmat": rmat, "design_twiss": twiss, "energy": energy}
 
 
-def get_rmat(device1: Device, device2: Device, physics_model="BMAD", device1_pos='beg', device2_pos='end'):
+def get_rmat(
+    device1: Device,
+    device2: Device,
+    physics_model="BMAD",
+    device1_pos="beg",
+    device2_pos="end",
+):
     """Get rmat from device1 to device2"""
     if physics_model == "BLEM":
         refresh_blem_model()
     else:
         time.sleep(2)
     model = _get_model_from_device(device1, physics_model, use_design=False)
-    rmat = model.get_rmat(device1.name, device2.name, from_device_pos=device1_pos, to_device_pos=device2_pos)
+    rmat = model.get_rmat(
+        device1.name,
+        device2.name,
+        from_device_pos=device1_pos,
+        to_device_pos=device2_pos,
+    )
 
     return rmat
 

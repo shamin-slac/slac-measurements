@@ -103,6 +103,7 @@ def load_from_h5(filepath: str) -> WireMeasurementCollectionResult:
             manual=dict(scan_ranges=_read_scan_ranges),
         )
 
+
 def _read_scan_ranges(group: h5py.Group) -> dict[str, tuple[int, int]]:
     """Backward compatibility for existing hdf5 files:
     Inverse of `_write_scan_ranges`."""
@@ -112,6 +113,7 @@ def _read_scan_ranges(group: h5py.Group) -> dict[str, tuple[int, int]]:
         axis: (int(sub.attrs[f"{axis}_start"]), int(sub.attrs[f"{axis}_end"]))
         for axis in axes
     }
+
 
 def _write_scan_ranges(value: dict[str, tuple[int, int]], group: h5py.Group) -> None:
     """Backward compatibility for existing hdf5 files:
