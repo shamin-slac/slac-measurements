@@ -43,8 +43,12 @@ def compute_emit_bmag(
         (useful for quad scans).
 
     weighted_fit : bool, default = False
-        Boolean specifying whether or not to weight the fitting loss function by the inverse beam
-        size. If True, smaller beam sizes will be prioritized in the non-linear curve fitting.
+        Boolean specifying whether or not to weight the fitting loss function. If beam size errors
+        are not provided, the beam sizes are used for the weights.
+
+    beam_sizes_err: numpy.ndarray, optional
+        Array of shape (batchshape x n_measurements x 1), representing the errors in each of
+        the measured beam sizes in [mm].
 
     maxiter : int, optional
         Maximum number of iterations to perform in nonlinear fitting (minimization algorithm).
@@ -59,11 +63,13 @@ def compute_emit_bmag(
           reconstruction point.
         - 'phase_advances': numpy.ndarray of shape (batchshape x n_steps) containing the phase advances
           at each point in each plane.
+        - 'chi_squared': numpy.ndarray of shape (batchshape x 1) containing the reduced chi-squared
+          of the reconstruction
         - 'beam_matrix': numpy.ndarray of shape (batchshape x 3) containing [sig11, sig12, sig22]
           where sig11, sig12, sig22 are the reconstructed beam matrix parameters at the entrance
           of the measurement quad.
         - 'twiss_at_reconstruction': numpy.ndarray of shape (batchshape x 1 x 3) containing the
-          reconstructed twiss parameters at the reference point (e.g. right before the quad in a quad 
+          reconstructed twiss parameters at the reference point (e.g. right before the quad in a quad
           scan or at the reference beam profile device in a multi measurement).
         - 'twiss': numpy.ndarray of shape (batchshape x nsteps x 3) containing the
           reconstructed twiss parameters at each measurement point (e.g. at the beam profile
@@ -220,15 +226,10 @@ def compute_emit_bmag(
         rv["twiss_at_reconstruction"][..., 1],
     )
     # shapes batchshape x 1
-    
+
     # propagate twiss params to beam profile device (expand_dims for broadcasting)
     rv["twiss"] = propagate_twiss(_twiss_from_beam_matrix(rv["beam_matrix"]), rmat)
     # result shape (batchshape x nsteps x 3)
-    beta, alpha = (
-        rv["twiss"][..., 0],
-        rv["twiss"][..., 1],
-    )
-    # shapes batchshape x nsteps
 
     # compute bmag and phase advances if twiss_design is provided
     if twiss_design is not None:
@@ -238,20 +239,26 @@ def compute_emit_bmag(
         )
         # shape batchshape x nsteps x 1 (multi-device) or batchshape x 1 (quad scan)
 
-        # result batchshape x 3 containing [beta, alpha, gamma]
         rv["bmag"] = bmag_func(
             beta_at_reconstruction, alpha_at_reconstruction, beta_design, alpha_design
         )  # result batchshape x 1
 
-        rv["phase_advances"] = np.arctan(r12/(beta_design*r11 - alpha_design*r12))
+        rv["phase_advances"] = np.arctan(r12 / (beta_design * r11 - alpha_design * r12))
     else:
         rv["bmag"] = None
         rv["phase_advances"] = None
 
-    fit_sig = np.expand_dims(np.stack(beam_matrix_tuple(fit_params), axis=-1), axis=-1)
-    pred_beam_sizes = np.array(np.sqrt(amat @ fit_sig))
-    beam_sizes = np.array(np.sqrt(beamsize_squared))
-    rv["chi_squared"] = np.sum(((pred_beam_sizes-beam_sizes)/beam_sizes_err)**2, axis=1)
+    if weighted_fit and beam_sizes_err is not None:
+        fit_sig = np.expand_dims(
+            np.stack(beam_matrix_tuple(fit_params), axis=-1), axis=-1
+        )
+        pred_beam_sizes = np.array(np.sqrt(amat @ fit_sig))
+        beam_sizes = np.array(np.sqrt(beamsize_squared))
+        rv["chi_squared"] = np.sum(
+            ((pred_beam_sizes - beam_sizes) / beam_sizes_err) ** 2, axis=1
+        )
+    else:
+        rv["chi_squared"] = None
 
     return rv
 
