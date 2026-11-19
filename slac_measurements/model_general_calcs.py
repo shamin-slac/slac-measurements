@@ -13,82 +13,40 @@ from slac_devices.wire import Wire
 def quad_scan_optics(
     magnet: Magnet, beam_profile_device: Union[Screen, Wire], physics_model="BMAD"
 ) -> Dict:
-    """Get rmat (6 x 6) from magnet to measurement device and twiss at measurement device"""
-    # TODO: get optics from arbitrary devices (potentially in different beam lines)
-    # have live BLEM model update
-    if physics_model == "BLEM":
-        refresh_blem_model()
-    else:
-        time.sleep(2)
-    model_live = _get_model_from_device(
-        beam_profile_device, physics_model, use_design=False
-    )
-    rmat = model_live.get_rmat(
-        from_device=magnet.name,
-        to_device=beam_profile_device.name,
-    )
-    model_design = _get_model_from_device(
-        beam_profile_device, physics_model, use_design=True
-    )
-    twiss = model_design.get_twiss(magnet.name, pos="beg")
-    energy = model_live.get_twiss(magnet.name, pos="beg")["p0c"] / 1e9  # GeV
+    """Get rmat (6 x 6) from magnet to measurement device;
+    get design twiss and energy at beginning of magnet"""
+    rmat = get_rmat(magnet, beam_profile_device, physics_model)
+    twiss = get_twiss(magnet, physics_model, True, "beg")
+    energy = get_energy(magnet, physics_model, False, "beg")
     return {"rmat": rmat, "design_twiss": twiss, "energy": energy}
 
 
 def get_optics_after_magnet(
     magnet: Magnet, beam_profile_device: Union[Screen, Wire], physics_model="BMAD"
 ) -> Dict:
-    """Get rmat from end of magnet to measurement device"""
-    # have live BLEM model update
-    if physics_model == "BLEM":
-        refresh_blem_model()
-    else:
-        time.sleep(2)
-    model_live = _get_model_from_device(
-        beam_profile_device, physics_model, use_design=False
-    )
-    full_rmat = model_live.get_rmat(
-        from_device=magnet.name,
-        to_device=beam_profile_device.name,
-    )
-    quad_rmat = model_live.get_rmat(
-        from_device=magnet.name,
-        to_device=magnet.name,
-    )
+    """Get rmat (6 x 6) from end of magnet to measurement device;
+    get design twiss and energy at beginning of magnet"""
+    full_rmat = get_rmat(magnet, beam_profile_device, physics_model)
+    quad_rmat = get_rmat(magnet, magnet, physics_model)
     after_quad_rmat = full_rmat @ np.linalg.inv(quad_rmat)
-    model_design = _get_model_from_device(
-        beam_profile_device, physics_model, use_design=True
-    )
-    twiss = model_design.get_twiss(beam_profile_device.name, pos="beg")
-    energy = model_live.get_twiss(magnet.name, pos="beg")["p0c"] / 1e9  # GeV
+    twiss = get_twiss(magnet, physics_model, True, "beg")
+    energy = get_energy(magnet, physics_model, False, "beg")
     return {"after_quad_rmat": after_quad_rmat, "design_twiss": twiss, "energy": energy}
 
 
 def multi_device_optics(
     beam_profile_devices: list[Union[Screen, Wire]], physics_model="BMAD"
 ) -> Dict:
-    """Get rmat and twiss from reference device to all measurement devices"""
-    if physics_model == "BLEM":
-        refresh_blem_model()
-    else:
-        time.sleep(2)
-    model_live = _get_model_from_device(
-        beam_profile_devices[-1], physics_model, use_design=False
-    )
-    beam_profile_device_names = [
-        beam_profile_device.name for beam_profile_device in beam_profile_devices
-    ]
+    """Get rmat from reference device to all measurement devices (n x 6 x 6);
+    get design twiss and energy at reference device"""
     rmat = []
-    ref_index = int(len(beam_profile_device_names) / 2)
-    device_ref = beam_profile_device_names[ref_index]
-    for device in beam_profile_device_names:
-        rmat.append(model_live.get_rmat(device_ref, device))
+    ref_index = int(len(beam_profile_devices) / 2)
+    device_ref = beam_profile_devices[ref_index]
+    for device in beam_profile_devices:
+        rmat.append(get_rmat(device_ref, device, physics_model))
     rmat = np.array(rmat)
-    model_design = _get_model_from_device(
-        beam_profile_devices[-1], physics_model, use_design=True
-    )
-    twiss = model_design.get_twiss(device_ref)
-    energy = model_live.get_twiss(device_ref)["p0c"] / 1e9  # GeV
+    twiss = get_twiss(device_ref, physics_model, True)
+    energy = get_energy(device_ref, physics_model, False)
     return {"rmat": rmat, "design_twiss": twiss, "energy": energy}
 
 
@@ -96,6 +54,7 @@ def get_rmat(
     device1: Device,
     device2: Device,
     physics_model="BMAD",
+    use_design=False,
     device1_pos="beg",
     device2_pos="end",
 ):
@@ -104,7 +63,7 @@ def get_rmat(
         refresh_blem_model()
     else:
         time.sleep(2)
-    model = _get_model_from_device(device1, physics_model, use_design=False)
+    model = _get_model_from_device(device1, physics_model, use_design=use_design)
     rmat = model.get_rmat(
         device1.name,
         device2.name,
@@ -113,6 +72,30 @@ def get_rmat(
     )
 
     return rmat
+
+
+def get_twiss(device: Device, physics_model="BMAD", use_design=True, pos="mid"):
+    """Get twiss at device"""
+    if physics_model == "BLEM":
+        refresh_blem_model()
+    elif physics_model == "BMAD":
+        time.sleep(2)
+    model = _get_model_from_device(device, physics_model, use_design=use_design)
+    twiss = model.get_twiss(device.name, pos=pos)
+
+    return twiss
+
+
+def get_energy(device: Device, physics_model="BMAD", use_design=False, pos="mid"):
+    """Get energy at device"""
+    if physics_model == "BLEM":
+        refresh_blem_model()
+    elif physics_model == "BMAD":
+        time.sleep(2)
+    model = _get_model_from_device(device, physics_model, use_design=use_design)
+    energy = model.get_twiss(device.name, pos=pos)["p0c"] / 1e9  # GeV
+
+    return energy
 
 
 def refresh_blem_model():
